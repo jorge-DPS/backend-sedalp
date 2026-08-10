@@ -7,27 +7,24 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class StaffMember extends Model
 {
     //
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'first_name',
-        'second_name',
+        'first_names',
         'paternal_surname',
         'maternal_surname',
+        'birth_date',
         'ci',
         'ci_complement',
-        'birth_date',
         'phone',
         'email',
-        'address',
         'position_id',
         'profession_id',
-        'entry_date',
-        'resignation_date',
         'active',
     ];
 
@@ -51,6 +48,6 @@ class StaffMember extends Model
 
     public function user(): HasOne
     {
-        return $this->hasOne(User::class);
+        return $this->hasOne(\App\Models\User::class);
     }
 }

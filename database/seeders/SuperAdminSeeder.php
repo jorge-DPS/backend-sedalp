@@ -3,19 +3,24 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 use Spatie\Permission\Models\Role;
 
 class SuperAdminSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        //
+        $name = config('simred.super_admin.name');
+        $email = config('simred.super_admin.email');
+        $password = config('simred.super_admin.password');
+
+        if (! $name || ! $email || ! $password) {
+            throw new RuntimeException(
+                'Las credenciales del super administrador no están configuradas.'
+            );
+        }
+
         $role = Role::firstOrCreate([
             'name' => 'super_admin',
             'guard_name' => 'api',
@@ -23,11 +28,10 @@ class SuperAdminSeeder extends Seeder
 
         $user = User::firstOrCreate(
             [
-                'email' => 'admin@sedalp.gob.bo',
+                'email' => $email,
             ],
             [
-                'name' => 'Super Administrador',
-                'password' => Hash::make('Admin12345'),
+                'password' => $password,
             ]
         );
 

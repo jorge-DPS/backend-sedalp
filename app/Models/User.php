@@ -13,7 +13,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
@@ -22,7 +21,7 @@ use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens;
+    // use HasApiTokens;
     use HasFactory;
     use HasRoles;
     use Notifiable;
@@ -36,7 +35,7 @@ class User extends Authenticatable implements JWTSubject
 
     protected $fillable = [
         'staff_member_id',
-        'name',
+        // 'name',
         'email',
         'password',
     ];
