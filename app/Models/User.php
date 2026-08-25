@@ -16,6 +16,9 @@ use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
+use App\Models\Communication\News;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
 // #[Fillable(['name', 'email', 'password'])]
 // #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements JWTSubject
@@ -71,5 +74,21 @@ class User extends Authenticatable implements JWTSubject
     public function getJWTCustomClaims(): array
     {
         return [];
+    }
+
+    public function createdNews(): HasMany
+    {
+        return $this->hasMany(
+            News::class,
+            'created_by'
+        );
+    }
+
+    public function updatedNews(): HasMany
+    {
+        return $this->hasMany(
+            News::class,
+            'updated_by'
+        );
     }
 }

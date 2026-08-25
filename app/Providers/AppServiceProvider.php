@@ -25,27 +25,27 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Bootstrap any application services.
      */
-public function boot(): void
-{
-    RateLimiter::for('login', function (Request $request) {
-        $email = Str::lower((string) $request->input('email'));
+    public function boot(): void
+    {
+        RateLimiter::for('login', function (Request $request) {
+            $email = Str::lower((string) $request->input('email'));
 
-        return Limit::perMinute(5)
-            ->by($email.'|'.$request->ip())
-            ->response(function (
-                Request $request,
-                array $headers
-            ) {
-                return response()->json([
-                    'message' => 'Demasiados intentos de inicio de sesión. Intente nuevamente en un momento.',
-                ], 429, $headers);
-            });
-    });
+            return Limit::perMinute(5)
+                ->by($email . '|' . $request->ip())
+                ->response(function (
+                    Request $request,
+                    array $headers
+                ) {
+                    return response()->json([
+                        'message' => 'Demasiados intentos de inicio de sesión. Intente nuevamente en un momento.',
+                    ], 429, $headers);
+                });
+        });
 
-    Gate::before(function (User $user, string $ability) {
-        return $user->hasRole(RoleName::SUPER_ADMIN->value)
-            ? true
-            : null;
-    });
-}
+        Gate::before(function (User $user, string $ability) {
+            return $user->hasRole(RoleName::SUPER_ADMIN->value)
+                ? true
+                : null;
+        });
+    }
 }
