@@ -23,7 +23,7 @@ Route::get('/estado', function () {
 });
 Route::prefix('auth')->group(function () {
 
-    Route::post('/auth/login', [AuthController::class, 'login'])
+    Route::post('/login', [AuthController::class, 'login'])
         ->middleware('throttle:login');
 
     Route::middleware('auth:api')->group(function () {
@@ -40,10 +40,7 @@ Route::prefix('admin')
 
         // NOTICIAS
 
-        Route::get('/news', [
-            NewsController::class,
-            'index',
-        ])->middleware('can:news.view');
+        Route::get('/news', [NewsController::class, 'index', ])->middleware('can:news.view');
 
         Route::post('/news', [
             NewsController::class,

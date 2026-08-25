@@ -9,50 +9,62 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('news_images', function (Blueprint $table) {
+        Schema::create('news', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('news_id')
-                ->constrained('news')
-                ->cascadeOnDelete();
+            $table->foreignId('created_by')
+                ->constrained('users')
+                ->restrictOnDelete();
+
+            $table->foreignId('updated_by')
+                ->nullable()
+                ->constrained('users')
+                ->restrictOnDelete();
+
+            $table->string('slug', 255)->unique();
+
+            $table->string('title', 255);
+
+            $table->string('subtitle', 255)->nullable();
+
+            $table->text('excerpt');
+
+            $table->text('description');
+
+            // Documento generado por TipTap.
+            $table->jsonb('content');
 
             /*
-             * Nombre base del archivo.
-             *
-             * Ejemplo:
-             * 550e8400-e29b-41d4-a716-446655440000
-             *
-             * NO almacenamos:
-             * .webp
-             * .png
-             * .jpeg
+             * Nullable porque una noticia en borrador
+             * todavía no necesariamente tiene fecha
+             * de publicación.
              */
-            $table->string('filename', 36)->unique();
-
-            $table->string('alt', 255);
-
-            $table->text('caption')
+            $table->date('published_at')
                 ->nullable();
 
-            $table->unsignedInteger('position');
+            $table->string('status', 20)
+                ->default('draft');
 
             $table->timestamps();
+            $table->softDeletes();
 
-            $table->unique([
-                'news_id',
-                'position',
-            ]);
+            $table->index(['status', 'published_at']);
+            $table->index('created_by');
+            $table->index('updated_by');
         });
 
+        /*
+         * Protección adicional a nivel PostgreSQL.
+         */
         DB::statement("
-            ALTER TABLE news_images
-            ADD CONSTRAINT news_images_position_check
-            CHECK (position >= 0)
+            ALTER TABLE news
+            ADD CONSTRAINT news_status_check
+            CHECK (status IN ('draft', 'published', 'archived'))
         ");
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('news_images');
+        Schema::dropIfExists('news');
     }
 };

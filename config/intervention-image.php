@@ -38,9 +38,31 @@ return [
     */
 
     'options' => [
+
+        /*
+         * Corrige automáticamente la orientación
+         * según EXIF.
+         */
         'autoOrientation' => true,
-        'decodeAnimation' => true,
+
+        /*
+         * No necesitamos imágenes animadas
+         * para este sistema.
+         */
+        'decodeAnimation' => false,
+
+        /*
+         * Fondo utilizado, por ejemplo,
+         * al convertir una imagen transparente a JPEG.
+         */
         'backgroundColor' => 'ffffff',
-        'strip' => false,
+
+        /*
+         * Elimina metadatos EXIF al generar
+         * las nuevas imágenes.
+         *
+         * Reduce información innecesaria y peso.
+         */
+        'strip' => true,
     ],
 ];

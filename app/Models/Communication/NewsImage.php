@@ -10,6 +10,12 @@ class NewsImage extends Model
 {
     use HasFactory;
 
+    /**
+     * El backend define dónde pertenecen
+     * físicamente las imágenes de noticias.
+     */
+    public const MEDIA_DIRECTORY = 'communication/news';
+
     protected $fillable = [
         'news_id',
         'filename',

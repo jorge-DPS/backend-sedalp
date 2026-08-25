@@ -16,17 +16,27 @@ return new class extends Migration
                 ->constrained('news')
                 ->cascadeOnDelete();
 
-            $table->string('filename', 100);
+            /*
+             * Nombre base del archivo.
+             *
+             * Ejemplo:
+             * 550e8400-e29b-41d4-a716-446655440000
+             *
+             * NO almacenamos:
+             * .webp
+             * .png
+             * .jpeg
+             */
+            $table->string('filename', 36)->unique();
 
             $table->string('alt', 255);
 
-            $table->text('caption')->nullable();
+            $table->text('caption')
+                ->nullable();
 
             $table->unsignedInteger('position');
 
             $table->timestamps();
-
-            $table->unique('filename');
 
             $table->unique([
                 'news_id',

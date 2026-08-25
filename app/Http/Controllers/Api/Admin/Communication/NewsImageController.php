@@ -8,52 +8,87 @@ use App\Http\Requests\Communication\StoreNewsImagesRequest;
 use App\Http\Requests\Communication\UpdateNewsImageRequest;
 use App\Http\Resources\Communication\NewsImageResource;
 use App\Models\Communication\News;
-use App\Models\Communication\NewsImage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
+use App\DTOs\Media\ImageOptions;
+use App\Enums\Media\ImageFormat;
+use App\Enums\Media\ImageResizeMode;
+use App\Models\Communication\NewsImage;
+use App\Services\Media\ImageService;
+
+
 class NewsImageController extends Controller
 {
+    public function __construct(
+        private readonly ImageService $imageService
+    ) {
+    }
     public function store(
         StoreNewsImagesRequest $request,
         News $news
     ) {
         $validated = $request->validated();
 
-        $storedPaths = [];
+        $createdImages = [];
+
+        $options = new ImageOptions(
+
+            /*
+             * Vue NO manda esto.
+             *
+             * Laravel decide dónde guardar.
+             */
+            directory: NewsImage::MEDIA_DIRECTORY,
+
+            width: 1920,
+
+            resizeMode: ImageResizeMode::SCALE_DOWN,
+
+            formats: [
+                ImageFormat::WEBP,
+                ImageFormat::PNG,
+                ImageFormat::JPEG,
+            ],
+
+            webpQuality: 80,
+
+            jpegQuality: 82,
+
+            jpegProgressive: true,
+        );
 
         try {
-            DB::transaction(function () use (
-                $request,
-                $news,
-                $validated,
-                &$storedPaths
-            ) {
+
+            DB::transaction(function () use ($request, $news, $validated, $options, &$createdImages) {
+
                 $position = (
-                    $news->images()->max('position') ?? -1
+                    $news->images()
+                        ->max('position') ?? -1
                 ) + 1;
 
                 foreach ($validated['images'] as $imageData) {
-                    $path = Storage::disk('public')
-                        ->putFile(
-                            "news/{$news->id}",
-                            $imageData['file']
+
+                    $filename = $this
+                        ->imageService
+                        ->store(
+                            file: $imageData['file'],
+                            options: $options,
                         );
 
-                    if ($path === false) {
-                        throw new \RuntimeException(
-                            'No se pudo almacenar la imagen.'
-                        );
-                    }
-
-                    $storedPaths[] = $path;
+                    $createdImages[] = $filename;
 
                     $news->images()->create([
-                        'path' => $path,
+                        'filename' => $filename,
+
                         'alt' => $imageData['alt'],
-                        'caption' => $imageData['caption'] ?? null,
+
+                        'caption' =>
+                            $imageData['caption']
+                            ?? null,
+
                         'position' => $position++,
                     ]);
                 }
@@ -64,10 +99,21 @@ class NewsImageController extends Controller
 
                 $news->save();
             });
-        } catch (Throwable $exception) {
-            if ($storedPaths !== []) {
-                Storage::disk('public')
-                    ->delete($storedPaths);
+        } catch (\Throwable $exception) {
+
+            /*
+             * PostgreSQL hace rollback,
+             * pero Storage no.
+             *
+             * Por eso debemos limpiar
+             * las imágenes generadas.
+             */
+            foreach ($createdImages as $filename) {
+
+                $this->imageService->delete(
+                    filename: $filename,
+                    directory: NewsImage::MEDIA_DIRECTORY,
+                );
             }
 
             throw $exception;
@@ -100,12 +146,19 @@ class NewsImageController extends Controller
         News $news,
         NewsImage $image
     ): JsonResponse {
-        $path = $image->path;
+        /*
+         * Protección adicional:
+         * la imagen debe pertenecer a la noticia
+         * indicada en la URL.
+         */
+        abort_unless(
+            $image->news_id === $news->id,
+            404
+        );
 
-        DB::transaction(function () use (
-            $news,
-            $image
-        ) {
+        $filename = $image->filename;
+
+        DB::transaction(function () use ($news, $image) {
             $image->delete();
 
             $this->normalizePositions($news);
@@ -114,13 +167,41 @@ class NewsImageController extends Controller
             $news->save();
         });
 
-        Storage::disk('public')->delete($path);
+        /*
+         * La base de datos ya quedó consistente.
+         *
+         * Ahora eliminamos físicamente las variantes.
+         */
+        try {
+            $this->imageService->delete(
+                filename: $filename,
+                directory: NewsImage::MEDIA_DIRECTORY,
+            );
+        } catch (Throwable $exception) {
+            /*
+             * No hacemos fallar la eliminación lógica
+             * de la imagen porque la BD ya hizo commit.
+             *
+             * Registramos el problema para poder limpiar
+             * posteriormente un posible archivo huérfano.
+             */
+            Log::error(
+                'No se pudieron eliminar archivos físicos de una imagen de noticia.',
+                [
+                    'news_id' => $news->id,
+                    'filename' => $filename,
+                    'exception' => $exception->getMessage(),
+                ]
+            );
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Imagen eliminada correctamente.',
         ]);
     }
+
+
 
     public function reorder(
         ReorderNewsMediaRequest $request,
@@ -164,11 +245,7 @@ class NewsImageController extends Controller
             'Las posiciones deben ser consecutivas desde 0.'
         );
 
-        DB::transaction(function () use (
-            $request,
-            $news,
-            $items
-        ) {
+        DB::transaction(function () use ($request, $news, $items) {
             /*
              * Posiciones temporales para evitar
              * conflicto con UNIQUE(news_id, position).
@@ -205,10 +282,7 @@ class NewsImageController extends Controller
         $news->images()
             ->orderBy('position')
             ->get()
-            ->each(function (
-                NewsImage $image,
-                int $position
-            ) {
+            ->each(function (NewsImage $image, int $position) {
                 $image->update([
                     'position' => $position,
                 ]);

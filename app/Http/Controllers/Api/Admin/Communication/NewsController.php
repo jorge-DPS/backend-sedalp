@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin\Communication;
 
-use App\Enums\NewsStatus;
+use App\Enums\Communication\NewsStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Communication\IndexNewsRequest;
 use App\Http\Requests\Communication\StoreNewsRequest;
