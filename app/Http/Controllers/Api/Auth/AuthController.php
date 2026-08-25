@@ -30,12 +30,32 @@ class AuthController extends Controller
         ]);
     }
 
-    public function me(): JsonResponse
-    {
-        return response()->json([
-            'user' => auth('api')->user(),
-        ]);
-    }
+public function me(): JsonResponse
+{
+    $user = auth('api')->user();
+
+    $roles = $user->getRoleNames()
+        ->values()
+        ->all();
+
+    $permissions = $user->getAllPermissions()
+        ->pluck('name')
+        ->values()
+        ->all();
+
+    $user->makeHidden([
+        'roles',
+        'permissions',
+    ]);
+
+    return response()->json([
+        'user' => $user,
+        'authorization' => [
+            'roles' => $roles,
+            'permissions' => $permissions,
+        ],
+    ]);
+}
 
     public function logout(): JsonResponse
     {

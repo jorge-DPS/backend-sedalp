@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+
 class StaffMember extends Model
 {
     //
@@ -23,6 +24,7 @@ class StaffMember extends Model
         'ci_complement',
         'phone',
         'email',
+        'organizational_unit_id',
         'position_id',
         'profession_id',
         'active',
@@ -34,6 +36,11 @@ class StaffMember extends Model
             'birth_date' => 'date',
             'active' => 'boolean',
         ];
+    }
+
+    public function organizationalUnit(): BelongsTo
+    {
+        return $this->belongsTo(OrganizationalUnit::class);
     }
 
     public function position(): BelongsTo
@@ -48,6 +55,6 @@ class StaffMember extends Model
 
     public function user(): HasOne
     {
-        return $this->hasOne(\App\Models\User::class);
+        return $this->hasOne(User::class);
     }
 }
