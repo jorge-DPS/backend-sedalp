@@ -6,6 +6,6 @@ enum RoleName: string
 {
     case SUPER_ADMIN = 'super_admin';
     case DIRECTOR = 'director';
-    case RESPONSABLE_PROGRAMAS = 'responsable_programas';
+    case RESPONSABLE_PROGRAMAS = 'responsable';
     case TECNICO = 'tecnico';
 }

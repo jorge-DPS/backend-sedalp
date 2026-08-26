@@ -4,20 +4,15 @@ namespace App\Http\Requests\AccessControl;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Validator;
 
-class StoreUserRequest extends FormRequest
+class UpdateUserAccessRequest extends FormRequest
 {
     public function authorize(): bool
     {
         $user = $this->user('api');
 
         if (! $user) {
-            return false;
-        }
-
-        if (! $user->can('users.create')) {
             return false;
         }
 
@@ -38,33 +33,6 @@ class StoreUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'staff_member_id' => [
-                'required',
-                'integer',
-
-                Rule::exists('staff_members', 'id')
-                    ->whereNull('deleted_at'),
-
-                Rule::unique('users', 'staff_member_id'),
-            ],
-
-            'email' => [
-                'required',
-                'string',
-                'email:rfc',
-                'max:255',
-                Rule::unique('users', 'email'),
-            ],
-
-            'password' => [
-                'required',
-                'confirmed',
-                Password::min(12)
-                    ->mixedCase()
-                    ->numbers()
-                    ->symbols(),
-            ],
-
             'role' => [
                 'required',
                 'string',

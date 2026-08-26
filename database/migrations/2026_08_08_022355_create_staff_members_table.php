@@ -79,6 +79,10 @@ return new class extends Migration
                 ->constrained('professions')
                 ->restrictOnDelete();
 
+            $table->foreignId('organizational_unit_id')
+                ->constrained('organizational_units')
+                ->restrictOnDelete();
+
             /*
             |--------------------------------------------------------------------------
             | Status
