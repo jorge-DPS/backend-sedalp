@@ -62,4 +62,12 @@ enum PermissionName: string
     case TECHNICAL_ASSISTANCES_CREATE = 'technical_assistances.create';
     case TECHNICAL_ASSISTANCES_UPDATE = 'technical_assistances.update';
     case TECHNICAL_ASSISTANCES_DELETE = 'technical_assistances.delete';
+
+    //
+    case ORGANIZATIONAL_UNITS_VIEW = 'organizational_units.view';
+    case ORGANIZATIONAL_UNITS_CREATE = 'organizational_units.create';
+    case ORGANIZATIONAL_UNITS_UPDATE = 'organizational_units.update';
+    case ORGANIZATIONAL_UNITS_DELETE = 'organizational_units.delete';
+
+    case ROLES_ASSIGN = 'roles.assign';
 }

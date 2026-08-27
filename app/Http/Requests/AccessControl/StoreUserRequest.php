@@ -13,26 +13,9 @@ class StoreUserRequest extends FormRequest
     {
         $user = $this->user('api');
 
-        if (! $user) {
-            return false;
-        }
-
-        if (! $user->can('users.create')) {
-            return false;
-        }
-
-        if (! $user->can('roles.assign')) {
-            return false;
-        }
-
-        if (
-            $this->filled('permissions')
-            && ! $user->can('permissions.assign')
-        ) {
-            return false;
-        }
-
-        return true;
+        return $user
+            && $user->can('users.create')
+            && $user->can('roles.assign');
     }
 
     public function rules(): array
@@ -43,7 +26,11 @@ class StoreUserRequest extends FormRequest
                 'integer',
 
                 Rule::exists('staff_members', 'id')
-                    ->whereNull('deleted_at'),
+                    ->where(
+                        fn ($query) => $query
+                            ->where('active', true)
+                            ->whereNull('deleted_at')
+                    ),
 
                 Rule::unique('users', 'staff_member_id'),
             ],
@@ -59,6 +46,7 @@ class StoreUserRequest extends FormRequest
             'password' => [
                 'required',
                 'confirmed',
+
                 Password::min(12)
                     ->mixedCase()
                     ->numbers()
@@ -71,22 +59,10 @@ class StoreUserRequest extends FormRequest
 
                 Rule::exists('roles', 'name')
                     ->where(
-                        fn ($query) => $query->where('guard_name', 'api')
-                    ),
-            ],
-
-            'permissions' => [
-                'sometimes',
-                'array',
-            ],
-
-            'permissions.*' => [
-                'string',
-                'distinct',
-
-                Rule::exists('permissions', 'name')
-                    ->where(
-                        fn ($query) => $query->where('guard_name', 'api')
+                        fn ($query) => $query->where(
+                            'guard_name',
+                            'api'
+                        )
                     ),
             ],
         ];
@@ -96,18 +72,27 @@ class StoreUserRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                $authenticatedUser = $this->user('api');
-
                 if (
                     $this->input('role') === 'super_admin'
-                    && ! $authenticatedUser?->hasRole('super_admin')
+                    && ! $this->user('api')?->hasRole('super_admin')
                 ) {
                     $validator->errors()->add(
                         'role',
-                        'No está autorizado para asignar el rol super_admin.'
+                        'No está autorizado para asignar super_admin.'
                     );
                 }
             },
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('email')) {
+            $this->merge([
+                'email' => strtolower(
+                    trim((string) $this->input('email'))
+                ),
+            ]);
+        }
     }
 }

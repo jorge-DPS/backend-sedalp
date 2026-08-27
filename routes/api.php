@@ -9,7 +9,12 @@ use App\Http\Controllers\Api\Admin\Communication\NewsImageController;
 use App\Http\Controllers\Api\Admin\Communication\NewsVideoController;
 
 use App\Http\Controllers\Api\Admin\AccessControl\AccessCatalogController;
+
 use App\Http\Controllers\Api\Admin\AccessControl\UserController;
+use App\Http\Controllers\Api\Admin\People\OrganizationalUnitController;
+use App\Http\Controllers\Api\Admin\People\PositionController;
+use App\Http\Controllers\Api\Admin\People\ProfessionController;
+use App\Http\Controllers\Api\Admin\People\StaffMemberController;
 // Route::get('/user', function (Request $request) {
 //     return $request->user();
 // })->middleware('auth:sanctum');
@@ -153,4 +158,171 @@ Route::prefix('admin')->middleware('auth:api')->scopeBindings()->group(function 
     '/access/permissions',
     [AccessCatalogController::class, 'permissions']
   )->middleware('can:permissions.view');
+
+  /*
+       |--------------------------------------------------------------------------
+       | Organizational Units
+       |--------------------------------------------------------------------------
+       */
+
+  Route::get(
+    '/organizational-units',
+    [OrganizationalUnitController::class, 'index']
+  )->middleware('can:organizational_units.view');
+
+  Route::post(
+    '/organizational-units',
+    [OrganizationalUnitController::class, 'store']
+  )->middleware('can:organizational_units.create');
+
+  Route::get(
+    '/organizational-units/{organizationalUnit}',
+    [OrganizationalUnitController::class, 'show']
+  )->middleware('can:organizational_units.view');
+
+  Route::patch(
+    '/organizational-units/{organizationalUnit}',
+    [OrganizationalUnitController::class, 'update']
+  )->middleware('can:organizational_units.update');
+
+  Route::delete(
+    '/organizational-units/{organizationalUnit}',
+    [OrganizationalUnitController::class, 'destroy']
+  )->middleware('can:organizational_units.delete');
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Positions
+  |--------------------------------------------------------------------------
+  */
+
+  Route::get(
+    '/positions',
+    [PositionController::class, 'index']
+  )->middleware('can:positions.view');
+
+  Route::post(
+    '/positions',
+    [PositionController::class, 'store']
+  )->middleware('can:positions.create');
+
+  Route::get(
+    '/positions/{position}',
+    [PositionController::class, 'show']
+  )->middleware('can:positions.view');
+
+  Route::patch(
+    '/positions/{position}',
+    [PositionController::class, 'update']
+  )->middleware('can:positions.update');
+
+  Route::delete(
+    '/positions/{position}',
+    [PositionController::class, 'destroy']
+  )->middleware('can:positions.delete');
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Professions
+  |--------------------------------------------------------------------------
+  */
+
+  Route::get(
+    '/professions',
+    [ProfessionController::class, 'index']
+  )->middleware('can:professions.view');
+
+  Route::post(
+    '/professions',
+    [ProfessionController::class, 'store']
+  )->middleware('can:professions.create');
+
+  Route::get(
+    '/professions/{profession}',
+    [ProfessionController::class, 'show']
+  )->middleware('can:professions.view');
+
+  Route::patch(
+    '/professions/{profession}',
+    [ProfessionController::class, 'update']
+  )->middleware('can:professions.update');
+
+  Route::delete(
+    '/professions/{profession}',
+    [ProfessionController::class, 'destroy']
+  )->middleware('can:professions.delete');
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Staff
+  |--------------------------------------------------------------------------
+  */
+
+  Route::get(
+    '/staff-members',
+    [StaffMemberController::class, 'index']
+  )->middleware('can:staff.view');
+
+  Route::post(
+    '/staff-members',
+    [StaffMemberController::class, 'store']
+  )->middleware('can:staff.create');
+
+  Route::get(
+    '/staff-members/{staffMember}',
+    [StaffMemberController::class, 'show']
+  )->middleware('can:staff.view');
+
+  Route::patch(
+    '/staff-members/{staffMember}',
+    [StaffMemberController::class, 'update']
+  )->middleware('can:staff.update');
+
+  Route::delete(
+    '/staff-members/{staffMember}',
+    [StaffMemberController::class, 'destroy']
+  )->middleware('can:staff.delete');
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Users
+  |--------------------------------------------------------------------------
+  */
+
+  Route::get(
+    '/users',
+    [UserController::class, 'index']
+  )->middleware('can:users.view');
+
+  Route::post(
+    '/users',
+    [UserController::class, 'store']
+  )->middleware([
+        'can:users.create',
+        'can:roles.assign',
+      ]);
+
+  Route::get(
+    '/users/{user}',
+    [UserController::class, 'show']
+  )->middleware('can:users.view');
+
+  Route::patch(
+    '/users/{user}',
+    [UserController::class, 'update']
+  )->middleware('can:users.update');
+
+  Route::put(
+    '/users/{user}/role',
+    [UserController::class, 'updateRole']
+  )->middleware('can:roles.assign');
+
+  Route::delete(
+    '/users/{user}',
+    [UserController::class, 'destroy']
+  )->middleware('can:users.delete');
 });
