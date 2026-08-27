@@ -1,390 +1,631 @@
 # Mapeo técnico del backend SEDALP
 
-> Alcance: estructura del proyecto, autenticación, autorización, modelos, migraciones, API, multimedia, seeders y pruebas.
+> Fecha de actualización: 27 de agosto de 2026.
 >
-> Fecha de actualización: 25 de agosto de 2026.
+> Alcance: código propio, estructura, dominios, modelos, relaciones, migraciones, esquema y tipos PostgreSQL, autenticación, autorización, API, validaciones, recursos, servicios, multimedia, seeders, configuración y pruebas.
 >
-> Fuente del inventario: archivos rastreados por Git y archivos no rastreados que no están excluidos por `.gitignore` (`git ls-files --cached --others --exclude-standard`). No se consideran `vendor`, `node_modules`, compilados, enlaces de almacenamiento ni otros artefactos ignorados.
+> Método de inventario: `git ls-files --cached --others --exclude-standard`, inspección del código, `php artisan route:list --except-vendor --json`, `php artisan migrate:status`, `php artisan db:show` y `php artisan db:table`.
+>
+> Exclusiones: se respetó `.gitignore`. No se mapearon `vendor/`, `node_modules/`, `public/build/`, `public/storage/`, logs, cachés ni otros artefactos generados o ignorados. El contenido de `.env` tampoco se documenta para no exponer secretos.
 
-## 1. Resumen del estado actual
+## 1. Resumen ejecutivo
 
-El proyecto es un backend API construido con Laravel 13.8 y PHP `^8.3`, orientado a PostgreSQL. Actualmente expone tres bloques funcionales:
+SEDALP es actualmente un backend administrativo API-first construido con Laravel. Los dominios funcionales implementados son:
 
-- Estado básico de la API.
-- Autenticación mediante JWT: login, consulta del usuario, renovación y cierre de sesión.
-- Administración de noticias, imágenes y videos, protegida por JWT y permisos.
+- autenticación JWT;
+- autorización por roles y permisos;
+- usuarios vinculados a miembros del personal;
+- unidades organizacionales, cargos, profesiones y personal;
+- noticias con imágenes y videos ordenables;
+- infraestructura Laravel para caché, sesiones y colas.
 
-La base del dominio institucional también está preparada mediante modelos y migraciones para usuarios, personal, cargos, profesiones, roles y permisos. Estos módulos todavía no tienen API CRUD propia.
+Inventario actual:
 
-El flujo activo de autenticación es JWT. Sanctum sigue instalado y conserva su migración de tokens personales, pero `HasApiTokens` y la ruta `/api/user` están comentados, por lo que no forma parte de la API activa.
+| Elemento | Cantidad |
+|---|---:|
+| Archivos no ignorados inventariados | 160 |
+| Archivos PHP | 103 |
+| Modelos propios | 8 |
+| Controladores, incluido el controlador base | 11 |
+| Form Requests | 20 |
+| API Resources | 8 |
+| Servicios propios | 2 |
+| DTO | 1 |
+| Enums | 5 |
+| Migraciones | 14 |
+| Tablas existentes | 22 |
+| Endpoints API efectivos y únicos | 48 |
+| Rutas adicionales | `/` y `/up` |
 
-## 2. Estructura relevante del proyecto
+Los 48 endpoints API se distribuyen así: 5 de estado/autenticación, 14 de noticias y multimedia, 20 de People y 9 de usuarios/catálogos de acceso.
+
+Sanctum está instalado y su tabla existe, pero la autenticación activa usa JWT. No hay una API pública de noticias: todas las operaciones de noticias están bajo `/api/admin` y requieren autenticación y permisos.
+
+## 2. Plataforma y dependencias
+
+### Entorno verificado
+
+| Componente | Versión o configuración |
+|---|---|
+| PHP requerido | `^8.3` |
+| PHP local | 8.5.9 |
+| Laravel requerido | `^13.8` |
+| Laravel bloqueado/ejecutado | 13.23.0 |
+| PostgreSQL local | 18.4 |
+| Base predeterminada | `pgsql` |
+| Aplicación | `SEDALP API` |
+| Entorno local | `local`, debug activo |
+| Zona horaria | UTC |
+| Locale | `en` |
+| Caché / cola / sesión | Base de datos |
+
+### Dependencias PHP directas bloqueadas
+
+| Paquete | Versión | Uso |
+|---|---:|---|
+| `laravel/framework` | 13.23.0 | Framework |
+| `php-open-source-saver/jwt-auth` | 2.9.2 | JWT |
+| `spatie/laravel-permission` | 8.3.0 | Roles y permisos |
+| `laravel/sanctum` | 4.3.3 | Tokens personales; flujo inactivo |
+| `intervention/image` | 4.3.1 | Procesamiento de imágenes |
+| `intervention/image-laravel` | 4.1.1 | Integración con Laravel |
+| `laravel/tinker` | 3.0.2 | Herramienta de desarrollo |
+| `pestphp/pest` | 5.0.3 | Pruebas |
+| `pestphp/pest-plugin-laravel` | 5.0.1 | Integración Pest/Laravel |
+| `laravel/pint` | 1.30.3 | Formato PHP |
+| `laravel/boost` | 2.4.13 | Herramientas de desarrollo |
+
+### Frontend mínimo incluido
+
+El repositorio no contiene una aplicación frontend de negocio. Incluye la vista `welcome.blade.php`, un `app.js` vacío, Tailwind CSS y Vite.
+
+| Paquete bloqueado | Versión |
+|---|---:|
+| `vite` | 8.2.0 |
+| `tailwindcss` | 4.3.3 |
+| `@tailwindcss/vite` | 4.3.3 |
+| `laravel-vite-plugin` | 3.1.3 |
+| `concurrently` | 9.2.4 |
+
+## 3. Estructura relevante
 
 ```text
 backend-sedalp/
 ├── app/
-│   ├── DTOs/Media/
-│   │   └── ImageOptions.php
+│   ├── DTOs/Media/ImageOptions.php
 │   ├── Enums/
 │   │   ├── Auth/{PermissionName,RoleName}.php
 │   │   ├── Communication/NewsStatus.php
 │   │   └── Media/{ImageFormat,ImageResizeMode}.php
 │   ├── Http/
-│   │   ├── Controllers/Api/
-│   │   │   ├── Auth/AuthController.php
-│   │   │   └── Admin/Communication/
-│   │   │       ├── NewsController.php
-│   │   │       ├── NewsImageController.php
-│   │   │       └── NewsVideoController.php
-│   │   ├── Requests/Communication/         # 8 Form Requests
-│   │   └── Resources/Communication/        # 3 API Resources
+│   │   ├── Controllers/
+│   │   │   ├── Controller.php
+│   │   │   └── Api/
+│   │   │       ├── Auth/AuthController.php
+│   │   │       └── Admin/
+│   │   │           ├── AccessControl/{AccessCatalogController,UserController}.php
+│   │   │           ├── People/{OrganizationalUnitController,PositionController,ProfessionController,StaffMemberController}.php
+│   │   │           └── Communication/{NewsController,NewsImageController,NewsVideoController}.php
+│   │   ├── Requests/
+│   │   │   ├── AccessControl/       # 4
+│   │   │   ├── People/              # 8
+│   │   │   └── Communication/       # 8
+│   │   └── Resources/
+│   │       ├── AccessControl/       # 1
+│   │       ├── People/              # 4
+│   │       └── Communication/       # 3
 │   ├── Models/
 │   │   ├── User.php
-│   │   ├── People/{Position,Profession,StaffMember}.php
+│   │   ├── People/{OrganizationalUnit,Position,Profession,StaffMember}.php
 │   │   └── Communication/{News,NewsImage,NewsVideo}.php
 │   ├── Providers/AppServiceProvider.php
-│   └── Services/Media/ImageService.php
-├── bootstrap/
-│   ├── app.php
-│   └── providers.php
-├── config/
-│   ├── auth.php, jwt.php, permission.php, sanctum.php
-│   ├── filesystems.php, images.php, intervention-image.php, media.php
-│   ├── simred.php
-│   └── configuración base de Laravel
+│   └── Services/
+│       ├── AccessControl/UserService.php
+│       └── Media/ImageService.php
+├── bootstrap/{app,providers}.php
+├── config/                         # Laravel, JWT, permisos, imágenes y SIMRED
 ├── database/
 │   ├── factories/UserFactory.php
-│   ├── migrations/                         # 13 migraciones
-│   └── seeders/
-│       ├── DatabaseSeeder.php
-│       ├── RolesAndPermissionsSeeder.php
-│       ├── SuperAdminSeeder.php
-│       └── NewsPermissionsSeeder.php
-├── resources/
-│   ├── css/app.css
-│   ├── js/app.js
-│   └── views/welcome.blade.php
+│   ├── migrations/                # 14
+│   └── seeders/                   # 4
+├── resources/{css,js,views}/
 ├── routes/{api,console,web}.php
-├── tests/
-│   ├── Feature/ExampleTest.php
-│   ├── Unit/ExampleTest.php
-│   ├── Pest.php
-│   └── TestCase.php
-├── composer.json
-├── package.json
+├── tests/{Feature,Unit}/
+├── composer.json / composer.lock
+├── package.json / package-lock.json
+├── phpunit.xml
 └── vite.config.js
 ```
 
-Los directorios `.agents/`, archivos de configuración del repositorio y marcadores `.gitignore` de `storage/`, `database/` y `bootstrap/cache/` son parte del conjunto no ignorado, pero no intervienen directamente en la arquitectura de ejecución de la aplicación.
+`.agents/` y `AGENTS.md` contienen instrucciones de desarrollo, no componentes de ejecución. Los marcadores `.gitignore` dentro de `storage/`, `database/` y `bootstrap/cache/` solo conservan la estructura de directorios.
 
-## 3. Mapa general de arquitectura
+## 4. Arquitectura y dominios
 
 ```mermaid
 flowchart LR
-    Client[Cliente API] --> Routes[routes/api.php]
-    Routes --> Status[Estado de la API]
-    Routes --> Auth[AuthController]
-    Routes --> Admin[API administrativa]
+    Client[Cliente HTTP] --> Api[routes/api.php]
+    Api --> Auth[AuthController]
+    Api --> Admin[Grupo admin: auth:api]
 
     Auth --> JWT[Guard api / JWT]
     JWT --> User[User]
-    User --> Roles[Spatie roles y permisos]
-    User -->|0..1| Staff[StaffMember]
+
+    Admin --> Access[Usuarios y catálogos de acceso]
+    Admin --> People[People]
+    Admin --> Communication[Noticias y multimedia]
+
+    Access --> UserService[UserService]
+    User --> Roles[Spatie roles/permisos]
+    User --> Staff[StaffMember]
+
+    Staff --> Unit[OrganizationalUnit]
     Staff --> Position[Position]
     Staff --> Profession[Profession]
 
-    Admin --> NewsController[NewsController]
-    Admin --> ImageController[NewsImageController]
-    Admin --> VideoController[NewsVideoController]
-    NewsController --> News[News]
-    ImageController --> NewsImage[NewsImage]
-    ImageController --> ImageService[ImageService]
-    ImageService --> Storage[Disco media / public]
-    VideoController --> NewsVideo[NewsVideo]
+    Communication --> News[News]
+    News --> Images[NewsImage]
+    News --> Videos[NewsVideo]
+    Images --> ImageService[ImageService]
+    ImageService --> Disk[Disco media]
 ```
 
-## 4. Modelos y relaciones
+### Tipos de datos de negocio
 
-### `App\Models\User`
-
-Representa las cuentas autenticables.
-
-| Aspecto | Detalle |
+| Dominio | Datos |
 |---|---|
-| Tabla | `users` |
-| Traits | `HasFactory`, `HasRoles`, `Notifiable`, `SoftDeletes` |
-| Contrato | `JWTSubject` |
-| Asignación masiva | `staff_member_id`, `email`, `password` |
-| Campos ocultos | `password`, `remember_token` |
-| Casts | `email_verified_at` a fecha/hora; `password` con hash automático |
-| Relaciones | Pertenece opcionalmente a `StaffMember`; crea y actualiza muchas noticias |
-| JWT | Usa la clave primaria como identificador y no agrega claims personalizados |
+| Identidad | usuario, correo, contraseña hasheada, verificación y vínculo opcional con personal |
+| Organización | unidades organizacionales, códigos institucionales, cargos y profesiones |
+| Personal | nombres, apellidos, fecha de nacimiento, CI, complemento, teléfono, correo, unidad, cargo, profesión y estado |
+| Acceso | roles, permisos, asignaciones polimórficas y permisos por rol |
+| Comunicación | noticias, slug, resumen, descripción, documento TipTap JSON, estado y fecha de publicación |
+| Multimedia | variantes físicas de imagen y referencias de videos de YouTube |
+| Infraestructura | sesiones, reset de contraseñas, tokens Sanctum, caché, locks, trabajos, lotes y fallos |
 
-La columna `name` fue eliminada mediante una migración posterior. `HasApiTokens` está comentado.
+## 5. Modelos Eloquent
 
-### Dominio `People`
+| Modelo | Tabla | Traits | Fillable | Casts | Relaciones |
+|---|---|---|---|---|---|
+| `User` | `users` | `HasFactory`, `HasRoles`, `Notifiable`, `SoftDeletes` | `staff_member_id`, `email`, `password` | `email_verified_at: datetime`, `password: hashed` | `belongsTo StaffMember`; `hasMany News` como creador y editor |
+| `OrganizationalUnit` | `organizational_units` | `HasFactory`, `SoftDeletes` | `name`, `code`, `description`, `active` | `active: boolean` | `hasMany StaffMember` |
+| `Position` | `positions` | `HasFactory`, `SoftDeletes` | `name`, `description`, `active` | `active: boolean` | `hasMany StaffMember` |
+| `Profession` | `professions` | `HasFactory`, `SoftDeletes` | `name`, `active` | `active: boolean` | `hasMany StaffMember` |
+| `StaffMember` | `staff_members` | `HasFactory`, `SoftDeletes` | datos personales, contacto, tres FK y `active` | `birth_date: date`, `active: boolean` | pertenece a unidad, cargo y profesión; tiene un usuario |
+| `News` | `news` | `HasFactory`, `SoftDeletes` | contenido, publicación y estado; no incluye campos de auditoría | `content: array`, `published_at: date`, `status: NewsStatus` | creador, editor, imágenes y videos |
+| `NewsImage` | `news_images` | `HasFactory` | `news_id`, `filename`, `alt`, `caption`, `position` | `position: integer` | pertenece a noticia |
+| `NewsVideo` | `news_videos` | `HasFactory` | `news_id`, `youtube_url`, `title`, `position` | `position: integer` | pertenece a noticia |
 
-| Modelo | Tabla | Rasgos y relaciones principales |
-|---|---|---|
-| `Position` | `positions` | `HasFactory`, `SoftDeletes`; tiene muchos miembros del personal |
-| `Profession` | `professions` | `HasFactory`, `SoftDeletes`; tiene muchos miembros del personal |
-| `StaffMember` | `staff_members` | `HasFactory`, `SoftDeletes`; pertenece a cargo y profesión; puede tener un usuario |
+`User` implementa `JWTSubject`: usa su PK como `sub` y no agrega claims personalizados. `password` y `remember_token` están ocultos. La columna histórica `users.name` fue eliminada.
 
-`StaffMember` permite asignación masiva de `first_names`, apellidos, fecha de nacimiento, CI, complemento, teléfono, correo, cargo, profesión y estado. El modelo está alineado con las columnas actuales de su migración.
+`News::scopeSearch()` busca con `ILIKE` sobre título, subtítulo y resumen. Las relaciones de imágenes y videos siempre se ordenan por `position`.
 
-### Dominio `Communication`
+### Enums y DTO
 
-#### `News`
-
-| Aspecto | Detalle |
+| Tipo | Valores o propósito |
 |---|---|
-| Tabla | `news` |
-| Traits | `HasFactory`, `SoftDeletes` |
-| Contenido | Título, subtítulo, resumen, descripción y documento JSON de TipTap |
-| Estado | Enum `NewsStatus`: `draft`, `published`, `archived` |
-| Auditoría | `created_by` obligatorio y `updated_by` opcional, ambos relacionados con `User` |
-| Multimedia | Tiene muchas imágenes y muchos videos, ordenados por `position` |
-| Búsqueda | Scope sobre `title`, `subtitle` y `excerpt` mediante `ILIKE` de PostgreSQL |
-| Slug | Único; se genera al crear y no cambia automáticamente al editar el título |
+| `NewsStatus` | `draft`, `published`, `archived` |
+| `RoleName` | `super_admin`, `director`, `responsable`, `tecnico` |
+| `ImageFormat` | `webp`, `png`, `jpeg` |
+| `ImageResizeMode` | `none`, `scale_down`, `cover_down` |
+| `PermissionName` | 44 permisos base descritos en la sección de autorización |
+| `ImageOptions` | directorio, formatos, modo, dimensiones, calidad WebP/JPEG y JPEG progresivo; valida directorios, duplicados, dimensiones y calidad 1–100 |
 
-#### `NewsImage`
+## 6. Esquema de datos PostgreSQL
 
-- Pertenece a una noticia.
-- Guarda un nombre base UUID sin extensión, texto alternativo, pie de foto opcional y posición.
-- Usa el directorio lógico `communication/news`.
-- Cada nombre de archivo es único y cada posición es única dentro de una noticia.
+### 6.1 Tablas de identidad y People
 
-#### `NewsVideo`
+La notación `timestamp` corresponde a `timestamp(0) without time zone`.
 
-- Pertenece a una noticia.
-- Guarda URL de YouTube, título y posición.
-- Cada posición es única dentro de una noticia.
+| Tabla | Columnas y tipos efectivos |
+|---|---|
+| `users` | `id bigint PK identity`; `staff_member_id bigint NULL UNIQUE FK`; `email varchar(255) UNIQUE`; `email_verified_at timestamp NULL`; `password varchar(255)`; `remember_token varchar(100) NULL`; `created_at timestamp NULL`; `updated_at timestamp NULL`; `deleted_at timestamp NULL` |
+| `organizational_units` | `id bigint PK identity`; `name varchar(150) UNIQUE`; `code varchar(50) UNIQUE`; `description varchar(255) NULL`; `active boolean DEFAULT true`; timestamps; `deleted_at` |
+| `positions` | `id bigint PK identity`; `name varchar(100) UNIQUE`; `description varchar(150) NULL`; `active boolean DEFAULT true`; timestamps; `deleted_at` |
+| `professions` | `id bigint PK identity`; `name varchar(150) UNIQUE`; `active boolean DEFAULT true`; timestamps; `deleted_at` |
+| `staff_members` | `id bigint PK identity`; `first_names varchar(100)`; `paternal_surname varchar(80) NULL`; `maternal_surname varchar(80) NULL`; `ci varchar(15)`; `ci_complement varchar(4) NULL`; `birth_date date NULL`; `phone varchar(20) NULL`; `email varchar(254) NULL`; `position_id bigint FK`; `profession_id bigint FK`; `organizational_unit_id bigint FK`; `active boolean DEFAULT true`; timestamps; `deleted_at` |
 
-### Relaciones del dominio
+Reglas importantes:
+
+- `users.staff_member_id` es opcional, único y usa `ON DELETE RESTRICT`.
+- La unicidad de `users.email` incluye filas borradas lógicamente.
+- Las tres FK de `staff_members` usan `ON DELETE RESTRICT`.
+- `staff_members.ci` debe cumplir `^[0-9]{1,15}$`.
+- `ci_complement`, cuando existe, debe tener exactamente dos caracteres `[A-Z0-9]`.
+- Un índice funcional único evita repetir `(ci, COALESCE(ci_complement, ''))`, también entre filas borradas lógicamente.
+- Existe un índice compuesto por apellidos y un índice por `organizational_units.active`.
+
+### 6.2 Noticias y multimedia
+
+| Tabla | Columnas y tipos efectivos |
+|---|---|
+| `news` | `id bigint PK identity`; `created_by bigint FK`; `updated_by bigint NULL FK`; `slug varchar(255) UNIQUE`; `title varchar(255)`; `subtitle varchar(255) NULL`; `excerpt text`; `description text`; `content jsonb`; `published_at date NULL`; `status varchar(20) DEFAULT 'draft'`; timestamps; `deleted_at` |
+| `news_images` | `id bigint PK identity`; `news_id bigint FK`; `filename varchar(36) UNIQUE`; `alt varchar(255)`; `caption text NULL`; `position integer`; timestamps |
+| `news_videos` | `id bigint PK identity`; `news_id bigint FK`; `youtube_url varchar(2048)`; `title varchar(255)`; `position integer`; timestamps |
+
+Reglas importantes:
+
+- `news.status` solo admite `draft`, `published` o `archived`.
+- `created_by` y `updated_by` referencian `users` con `ON DELETE RESTRICT`.
+- Hay índices sobre `(status, published_at)`, `created_by` y `updated_by`.
+- `news_images` y `news_videos` usan `ON DELETE CASCADE` ante una eliminación física de la noticia.
+- `position >= 0` y `(news_id, position)` es único en ambas tablas.
+- `filename` almacena solo el UUID base, sin extensión.
+
+### 6.3 Roles y permisos
+
+| Tabla | Columnas y restricciones |
+|---|---|
+| `permissions` | `id bigint PK`; `name varchar(255)`; `guard_name varchar(255)`; timestamps; UNIQUE `(name, guard_name)` |
+| `roles` | `id bigint PK`; `name varchar(255)`; `guard_name varchar(255)`; timestamps; UNIQUE `(name, guard_name)` |
+| `model_has_permissions` | `permission_id bigint FK CASCADE`; `model_type varchar(255)`; `model_id bigint`; PK compuesta por los tres campos |
+| `model_has_roles` | `role_id bigint FK CASCADE`; `model_type varchar(255)`; `model_id bigint`; PK compuesta por los tres campos |
+| `role_has_permissions` | `permission_id bigint FK CASCADE`; `role_id bigint FK CASCADE`; PK compuesta |
+
+Spatie está configurado sin equipos (`permission.teams=false`) y con guard `api`.
+
+### 6.4 Tablas de infraestructura
+
+| Tabla | Columnas |
+|---|---|
+| `personal_access_tokens` | PK bigint; morfo `tokenable_type/tokenable_id`; `name text`; `token varchar(64) UNIQUE`; `abilities text NULL`; `last_used_at`, `expires_at` y timestamps |
+| `password_reset_tokens` | `email varchar(255) PK`; `token varchar(255)`; `created_at timestamp NULL` |
+| `sessions` | `id varchar(255) PK`; `user_id bigint NULL` indexado, sin FK; IP, user agent, payload y última actividad |
+| `cache` | `key varchar(255) PK`; `value text`; `expiration bigint` indexado |
+| `cache_locks` | `key varchar(255) PK`; `owner varchar(255)`; `expiration bigint` indexado |
+| `jobs` | PK bigint; cola, payload, intentos y marcas Unix de reserva/disponibilidad/creación |
+| `job_batches` | ID string PK; nombre, contadores, IDs fallidos, opciones y marcas Unix |
+| `failed_jobs` | PK bigint; UUID único, conexión, cola, payload, excepción y `failed_at` |
+| `migrations` | `id integer PK identity`; `migration varchar(255)`; `batch integer` |
+
+No se detectaron vistas ni tipos definidos por el usuario. `jsonb` es un tipo nativo de PostgreSQL.
+
+### 6.5 Relaciones
 
 ```text
-positions     1 ─────── N staff_members
-professions   1 ─────── N staff_members
-staff_members 1 ───── 0..1 users
-users         N ─────── N roles
-roles         N ─────── N permissions
-users         N ─────── N permissions (asignación directa)
-users         1 ─────── N news (created_by / updated_by)
-news          1 ─────── N news_images
-news          1 ─────── N news_videos
+organizational_units 1 ───── N staff_members
+positions            1 ───── N staff_members
+professions          1 ───── N staff_members
+staff_members        1 ─── 0..1 users
+users                N ───── N roles
+users                N ───── N permissions (soportado por Spatie)
+roles                N ───── N permissions
+users                1 ───── N news mediante created_by
+users                1 ───── N news mediante updated_by
+news                 1 ───── N news_images
+news                 1 ───── N news_videos
 ```
 
-## 5. Migraciones y esquema de datos
+### 6.6 Migraciones
 
-### Migraciones base
+Las 14 migraciones están aplicadas en el entorno local, todas en el batch 1.
 
-| Migración | Tablas o cambio | Propósito |
-|---|---|---|
-| `0001_01_01_000000_create_users_table.php` | `users`, `password_reset_tokens`, `sessions` | Usuarios, recuperación de contraseña y sesiones |
-| `0001_01_01_000001_create_cache_table.php` | `cache`, `cache_locks` | Caché y bloqueos |
-| `0001_01_01_000002_create_jobs_table.php` | `jobs`, `job_batches`, `failed_jobs` | Colas, lotes y trabajos fallidos |
-| `2026_08_03_051833_create_personal_access_tokens_table.php` | `personal_access_tokens` | Infraestructura de Sanctum actualmente inactiva en rutas/modelo |
-
-### Personal y usuarios
-
-| Migración | Resultado principal |
+| Migración | Efecto |
 |---|---|
-| `2026_08_08_022340_create_positions_table.php` | Cargos únicos, descripción opcional, estado y borrado lógico |
-| `2026_08_08_022349_create_professions_table.php` | Profesiones únicas, estado y borrado lógico |
-| `2026_08_08_022355_create_staff_members_table.php` | Datos personales, documento, contacto, cargo, profesión, estado y borrado lógico |
-| `2026_08_08_031825_add_staff_member_id_and_soft_deletes_to_users_table.php` | Relación opcional y única con personal; borrado lógico de usuarios |
-| `2026_08_08_041349_create_permission_tables.php` | Tablas de roles y permisos de Spatie |
-| `2026_08_10_051438_remove_name_from_users_table.php` | Elimina `name` de `users` |
+| `0001_01_01_000000_create_users_table.php` | Crea usuarios, reset de contraseñas y sesiones |
+| `0001_01_01_000001_create_cache_table.php` | Crea caché y locks |
+| `0001_01_01_000002_create_jobs_table.php` | Crea jobs, batches y failed jobs |
+| `2026_08_03_051833_create_personal_access_tokens_table.php` | Crea tokens de Sanctum |
+| `2026_08_08_022340_create_positions_table.php` | Crea cargos |
+| `2026_08_08_022349_create_professions_table.php` | Crea profesiones |
+| `2026_08_08_022350_create_organizational_units_table.php` | Crea unidades organizacionales |
+| `2026_08_08_022355_create_staff_members_table.php` | Crea personal, FK, checks e índices |
+| `2026_08_08_031825_add_staff_member_id_and_soft_deletes_to_users_table.php` | Vincula usuarios con personal y agrega soft delete |
+| `2026_08_08_041349_create_permission_tables.php` | Crea las cinco tablas de Spatie |
+| `2026_08_10_051438_remove_name_from_users_table.php` | Elimina `users.name` |
+| `2026_08_24_222819_create_news_table.php` | Crea noticias, auditoría, estado, JSONB e índices |
+| `2026_08_24_222820_create_news_images_table.php` | Crea imágenes y orden por noticia |
+| `2026_08_24_222821_create_news_videos_table.php` | Crea videos y orden por noticia |
 
-La tabla `staff_members` aplica restricciones PostgreSQL al formato del CI y su complemento, un índice único funcional para evitar documentos duplicados y relaciones `restrictOnDelete()` con cargos y profesiones.
-
-### Noticias y multimedia
-
-| Migración | Resultado principal |
-|---|---|
-| `2026_08_24_222819_create_news_table.php` | Noticias con slug único, contenido `jsonb`, estado restringido, publicación, auditoría, índices y borrado lógico |
-| `2026_08_24_222820_create_news_images_table.php` | Imágenes asociadas, nombre UUID, metadatos, posición no negativa y eliminación en cascada |
-| `2026_08_24_222821_create_news_videos_table.php` | Videos de YouTube, posición no negativa y eliminación en cascada |
-
-Las tablas de imágenes y videos tienen una restricción única compuesta sobre `news_id` y `position`. La cascada se ejecuta al eliminar físicamente una noticia; el borrado habitual de `News` es lógico.
-
-## 6. Autenticación y autorización
+## 7. Autenticación y autorización
 
 ### JWT
 
-El guard predeterminado `api` usa el driver `jwt` y el proveedor Eloquent de `User`.
-
-1. El cliente envía `email` y `password` a `/api/auth/login`.
-2. La solicitud se limita a cinco intentos por minuto por combinación de correo normalizado e IP.
-3. El guard intenta autenticar las credenciales.
-4. Un fallo responde con HTTP `401`; un exceso de intentos responde con HTTP `429`.
-5. Un login correcto devuelve `access_token`, tipo `bearer` y expiración en segundos.
-6. El token Bearer permite usar `me`, `refresh`, `logout` y las rutas administrativas autorizadas.
+- El guard predeterminado es `api`, driver `jwt`, proveedor Eloquent `User`.
+- Algoritmo predeterminado: `HS256`.
+- TTL predeterminado: 60 minutos.
+- Ventana de refresh predeterminada: 20.160 minutos.
+- Blacklist activa; `logout` invalida el token.
+- Login limitado a 5 intentos por minuto por `correo normalizado + IP`.
+- El token se envía como Bearer.
+- Todas las excepciones de rutas `api/*` se renderizan como JSON.
 
 ### Roles y permisos
 
-- `RoleName` define `super_admin`, `director`, `responsable_programas` y `tecnico`.
-- `PermissionName` define 39 permisos para personal, cargos, profesiones, usuarios, roles, regiones, provincias, municipios, asignaciones regionales y asistencias técnicas.
-- El módulo de noticias agrega `news.view`, `news.create`, `news.update`, `news.delete` y `news.publish`.
-- El rol `comunicador` recibe los cinco permisos de noticias.
-- `Gate::before` concede todas las capacidades al rol `super_admin`.
-- Las rutas administrativas validan permisos con middleware `can:*`; los Form Requests repiten la autorización correspondiente.
-- Cambiar una noticia hacia o desde `published` exige además `news.publish` dentro del controlador.
+`PermissionName` crea 44 permisos base:
 
-## 7. API actual
+| Prefijo | Operaciones |
+|---|---|
+| `staff`, `positions`, `professions`, `users`, `roles`, `regions`, `provinces`, `municipalities`, `technical_assistances`, `organizational_units` | `view`, `create`, `update`, `delete` |
+| `region_assignments` | `view`, `create`, `update` |
+| Roles | permiso adicional `roles.assign` |
 
-Archivo principal: `routes/api.php`. La aplicación registra 19 rutas API propias.
+`NewsPermissionsSeeder` agrega 5 permisos: `news.view`, `news.create`, `news.update`, `news.delete` y `news.publish`. El total local es 49 permisos.
 
-### Estado y autenticación
+Roles existentes:
 
-| Método | Ruta | Protección | Acción |
+| Rol | Origen | Permisos sincronizados |
+|---|---|---|
+| `super_admin` | `RoleName` | Bypass global con `Gate::before`; no necesita asignaciones explícitas |
+| `director` | `RoleName` | 8 permisos: consulta de personal/catálogos geográficos, gestión de asignaciones regionales y consulta de asistencias |
+| `responsable` | `RoleName` | 4 permisos de consulta geográfica y asistencias |
+| `tecnico` | `RoleName` | 7 permisos de consulta geográfica, asignación regional y gestión parcial de asistencias |
+| `comunicador` | seeder de noticias | Los 5 permisos `news.*` |
+
+La base local contiene 5 roles y 24 vínculos rol-permiso. Los endpoints usan middleware `can:*`; los Form Requests vuelven a comprobar permisos para altas y modificaciones.
+
+## 8. API disponible
+
+Base: `/api`. Todas las rutas administrativas comparten `auth:api` y `scopeBindings()`. No hay nombres de ruta definidos.
+
+### 8.1 Estado y autenticación — 5 endpoints
+
+| Método | Ruta | Protección | Entrada | Salida principal |
+|---|---|---|---|---|
+| GET | `/api/estado` | Pública | — | `success`, mensaje, PostgreSQL y Laravel 13 declarados |
+| POST | `/api/auth/login` | `throttle:login` | `email: email`, `password: string` | JWT, tipo bearer y expiración; 401 o 429 en error |
+| GET | `/api/auth/me` | `auth:api` | — | usuario y `authorization.roles/permissions` |
+| POST | `/api/auth/logout` | `auth:api` | — | invalida token actual |
+| POST | `/api/auth/refresh` | `auth:api` | — | JWT renovado |
+
+### 8.2 Noticias — 6 endpoints
+
+| Método | Ruta | Permiso | Comportamiento |
 |---|---|---|---|
-| `GET` | `/api/estado` | Pública | Devuelve estado básico, base declarada y versión del framework |
-| `POST` | `/api/auth/login` | `throttle:login` | Valida credenciales y emite JWT |
-| `GET` | `/api/auth/me` | `auth:api` | Devuelve el usuario JWT autenticado |
-| `POST` | `/api/auth/logout` | `auth:api` | Invalida el JWT actual |
-| `POST` | `/api/auth/refresh` | `auth:api` | Renueva el JWT |
+| GET | `/api/admin/news` | `news.view` | Lista paginada; `search`, `status`, `per_page` 1–100 |
+| POST | `/api/admin/news` | `news.create` | Crea noticia y slug; publicar exige además `news.publish` |
+| GET | `/api/admin/news/{news}` | `news.view` | Detalle con autor, editor, imágenes y videos |
+| PUT | `/api/admin/news/{news}` | `news.update` | Actualización completa o parcial según campos enviados |
+| PATCH | `/api/admin/news/{news}` | `news.update` | Misma acción que PUT |
+| DELETE | `/api/admin/news/{news}` | `news.delete` | Registra editor y aplica soft delete |
 
-### Noticias
+Entrada de creación:
 
-Todas las rutas siguientes usan `auth:api`, bindings anidados con alcance y el permiso indicado.
+- `title: string(255)` obligatorio;
+- `subtitle: string(255)|null`;
+- `excerpt: string` y `description: string` obligatorios;
+- `content: array` obligatorio, `content.type='doc'`, `content.content: array|null`;
+- `status: draft|published|archived`, opcional, por defecto `draft`;
+- `published_at: date|null`, obligatorio cuando el estado enviado es `published`.
 
-| Método | Ruta | Permiso | Acción |
+La actualización usa los mismos tipos con reglas `sometimes`. El slug se genera de forma única consultando incluso noticias eliminadas y no cambia cuando se edita el título.
+
+### 8.3 Imágenes de noticias — 4 endpoints
+
+| Método | Ruta | Permiso | Entrada/acción |
 |---|---|---|---|
-| `GET` | `/api/admin/news` | `news.view` | Lista paginada con búsqueda y filtro por estado |
-| `POST` | `/api/admin/news` | `news.create` | Crea una noticia; publicar exige `news.publish` |
-| `GET` | `/api/admin/news/{news}` | `news.view` | Obtiene una noticia con autor, editor y multimedia |
-| `PUT`, `PATCH` | `/api/admin/news/{news}` | `news.update` | Actualiza la noticia sin regenerar su slug |
-| `DELETE` | `/api/admin/news/{news}` | `news.delete` | Aplica borrado lógico y registra quién la eliminó |
+| POST | `/api/admin/news/{news}/images` | `news.update` | 1–20 elementos con archivo, `alt` y `caption` opcional |
+| PATCH | `/api/admin/news/{news}/images/{image}` | `news.update` | Cambia `alt` y/o `caption` |
+| PUT | `/api/admin/news/{news}/images/reorder` | `news.update` | `items[{id, position}]`; exige todos los IDs y posiciones 0..N-1 |
+| DELETE | `/api/admin/news/{news}/images/{image}` | `news.update` | Borra registro, normaliza posiciones e intenta borrar variantes físicas |
 
-El listado acepta `search`, `status` y `per_page` entre 1 y 100; por defecto devuelve 15 registros ordenados desde el más reciente.
+Cada archivo debe ser JPG/JPEG/PNG/WebP y pesar como máximo 10 MB. `alt` admite 255 caracteres y `caption` 1.000.
 
-### Imágenes de noticias
+### 8.4 Videos de noticias — 4 endpoints
 
-| Método | Ruta | Permiso | Acción |
+| Método | Ruta | Permiso | Entrada/acción |
 |---|---|---|---|
-| `POST` | `/api/admin/news/{news}/images` | `news.update` | Sube de 1 a 20 imágenes |
-| `PATCH` | `/api/admin/news/{news}/images/{image}` | `news.update` | Edita `alt` y/o `caption` |
-| `PUT` | `/api/admin/news/{news}/images/reorder` | `news.update` | Reordena todas las imágenes con posiciones consecutivas desde 0 |
-| `DELETE` | `/api/admin/news/{news}/images/{image}` | `news.update` | Elimina registro, variantes físicas y normaliza posiciones |
+| POST | `/api/admin/news/{news}/videos` | `news.update` | `youtube_url: url(2048)`, `title: string(255)` |
+| PATCH | `/api/admin/news/{news}/videos/{video}` | `news.update` | Edita URL y/o título |
+| PUT | `/api/admin/news/{news}/videos/reorder` | `news.update` | Todos los IDs y posiciones consecutivas desde 0 |
+| DELETE | `/api/admin/news/{news}/videos/{video}` | `news.update` | Elimina y normaliza posiciones |
 
-Cada archivo debe ser JPG, JPEG, PNG o WebP y pesar como máximo 10 MB. El campo `alt` es obligatorio.
+### 8.5 Catálogos de People — 15 endpoints
 
-### Videos de noticias
+Cada recurso expone cinco endpoints: GET colección, POST colección, GET elemento, PATCH elemento y DELETE elemento.
 
-| Método | Ruta | Permiso | Acción |
+| Recurso y rutas | Permisos | Filtros GET |
+|---|---|---|
+| `/api/admin/organizational-units[/{organizationalUnit}]` | `organizational_units.view/create/update/delete` | `search`, `active`, `per_page` |
+| `/api/admin/positions[/{position}]` | `positions.view/create/update/delete` | `search`, `active`, `per_page` |
+| `/api/admin/professions[/{profession}]` | `professions.view/create/update/delete` | `search`, `active`, `per_page` |
+
+Las listas se ordenan por nombre y aceptan 1–100 registros por página, con 15 por defecto. La eliminación es lógica y responde 409 si existe personal activo/no eliminado asociado.
+
+Contratos:
+
+- unidad: `name string(150)`, `code string(50)` en mayúsculas con patrón `^[A-Z][A-Z0-9_]*$`, `description string(255)|null`, `active boolean`;
+- cargo: `name string`, `description string|null`, `active boolean`;
+- profesión: `name string(150)`, `active boolean`.
+
+### 8.6 Personal — 5 endpoints
+
+| Método | Ruta | Permiso |
+|---|---|---|
+| GET | `/api/admin/staff-members` | `staff.view` |
+| POST | `/api/admin/staff-members` | `staff.create` |
+| GET | `/api/admin/staff-members/{staffMember}` | `staff.view` |
+| PATCH | `/api/admin/staff-members/{staffMember}` | `staff.update` |
+| DELETE | `/api/admin/staff-members/{staffMember}` | `staff.delete` |
+
+Filtros: `search` sobre nombres, apellidos, CI y correo; `organizational_unit_id`, `position_id`, `profession_id`, `active` y `per_page`. Orden: apellido paterno y nombres.
+
+Entrada:
+
+- `first_names` y `paternal_surname` obligatorios;
+- `maternal_surname`, `birth_date`, `ci_complement`, `phone` y `email` opcionales;
+- `birth_date` no puede ser futura;
+- `ci` obligatorio;
+- las FK deben apuntar a registros activos y no eliminados;
+- `active` es booleano opcional;
+- se normalizan espacios, correo en minúsculas y complemento en mayúsculas;
+- la validación consulta también personal eliminado para impedir CI duplicado.
+
+No se permite eliminar personal mientras tenga una cuenta de usuario no eliminada; responde 409.
+
+### 8.7 Usuarios y acceso — 9 endpoints
+
+| Método | Ruta | Permiso | Comportamiento |
 |---|---|---|---|
-| `POST` | `/api/admin/news/{news}/videos` | `news.update` | Agrega URL de YouTube y título |
-| `PATCH` | `/api/admin/news/{news}/videos/{video}` | `news.update` | Edita URL y/o título |
-| `PUT` | `/api/admin/news/{news}/videos/reorder` | `news.update` | Reordena todos los videos con posiciones consecutivas desde 0 |
-| `DELETE` | `/api/admin/news/{news}/videos/{video}` | `news.update` | Elimina el video y normaliza posiciones |
+| GET | `/api/admin/users` | `users.view` | Lista por ID descendente; búsqueda por correo y paginación |
+| POST | `/api/admin/users` | `users.create` + `roles.assign` | Crea usuario para personal activo y asigna un rol |
+| GET | `/api/admin/users/{user}` | `users.view` | Detalle con personal, rol y permisos efectivos |
+| PATCH | `/api/admin/users/{user}` | `users.update` | Cambia correo y/o contraseña |
+| PUT | `/api/admin/users/{user}/role` | `roles.assign` | Reemplaza el rol por uno |
+| DELETE | `/api/admin/users/{user}` | `users.delete` | Soft delete; impide autoeliminación y protege super_admin |
+| GET | `/api/admin/access/roles` | `roles.view` | Roles con permisos; oculta super_admin a quien no lo tenga |
+| GET | `/api/admin/access/permissions` | `permissions.view` | Catálogo de permisos |
+| PUT | `/api/admin/users/{user}/access` | `users.update` | Registrado, pero no operativo: el método `updateAccess` no existe |
 
-## 8. Procesamiento de imágenes
+Creación de usuario:
 
-`ImageService` concentra el almacenamiento y evita que los controladores decidan rutas o formatos físicos.
+- `staff_member_id: integer` obligatorio, activo, no eliminado y único;
+- `email: email RFC, max 255`, normalizado a minúsculas y único;
+- `password` confirmada, mínimo 12, mayúsculas/minúsculas, números y símbolos;
+- `role` debe existir para guard `api`;
+- solo un superadministrador puede asignar `super_admin`.
 
-- `ImageOptions` valida directorio, formatos, dimensiones, modo de redimensionado y calidades.
-- `ImageResizeMode` permite conservar tamaño, reducir proporcionalmente o recortar/reducir a una cobertura.
-- `ImageFormat` admite WebP, PNG y JPEG.
-- Las imágenes de noticias se reducen proporcionalmente hasta un ancho máximo de 1920 px.
-- Por cada carga se generan variantes `.webp`, `.png` y `.jpeg` con el mismo UUID base.
-- El disco se toma de `MEDIA_DISK` y usa `public` como valor predeterminado.
-- Si falla una variante, el servicio intenta limpiar todas las variantes generadas.
-- `NewsImageResource` devuelve `filename` sin extensión y `baseUrl`; el cliente construye la URL de la variante requerida.
+La actualización admite correo y contraseña con las mismas reglas. El cambio de rol reemplaza los roles existentes mediante `syncRoles`.
 
-## 9. Seeders
+## 9. Recursos y formato de salida
 
-### `DatabaseSeeder`
+| Resource | Campos principales |
+|---|---|
+| `UserResource` | `id`, `email`, personal resumido, roles, permisos efectivos, timestamps |
+| `OrganizationalUnitResource` | ID, nombre, código, descripción, activo, timestamps |
+| `PositionResource` | ID, nombre, descripción, activo, timestamps |
+| `ProfessionResource` | ID, nombre, activo, timestamps |
+| `StaffMemberResource` | datos personales, fecha `Y-m-d`, catálogos anidados, usuario y timestamps |
+| `NewsResource` | contenido, `publishedAt`, estado, multimedia, `createdBy`, `updatedBy`, timestamps ISO |
+| `NewsImageResource` | ID, UUID base, `baseUrl`, alt, caption y posición |
+| `NewsVideoResource` | ID, `youtubeUrl`, título y posición |
 
-Ejecuta, en este orden:
+Las colecciones paginadas usan la envoltura, links y metadatos estándar de Laravel. People y usuarios responden mayormente en `snake_case`; noticias mezclan nombres de salida en `camelCase`.
 
-1. `RolesAndPermissionsSeeder`.
-2. `SuperAdminSeeder`.
+## 10. Servicios y procesamiento multimedia
+
+### `UserService`
+
+- crea usuarios y sincroniza un rol dentro de una transacción;
+- actualiza correo/contraseña;
+- reemplaza roles con `syncRoles`;
+- carga personal, unidad, cargo, profesión y permisos de roles.
+
+### `ImageService`
+
+- genera un UUID como nombre base;
+- decodifica con Intervention Image;
+- aplica `none`, `scaleDown` o `coverDown`;
+- genera WebP, PNG y JPEG;
+- guarda en el disco `media.disk`;
+- elimina todas las variantes conocidas;
+- limpia archivos parciales si falla una conversión.
+
+Para noticias se usa:
+
+- directorio `communication/news`;
+- ancho máximo 1.920 px conservando proporción;
+- WebP calidad 80;
+- JPEG calidad 82 y progresivo;
+- PNG sin calidad personalizada;
+- orientación EXIF automática, animación desactivada y metadatos eliminados;
+- driver de imagen predeterminado GD;
+- disco predeterminado `public`, configurable con `MEDIA_DISK`.
+
+## 11. Seeders y datos iniciales
+
+`DatabaseSeeder` ejecuta:
+
+1. `RolesAndPermissionsSeeder`;
+2. `SuperAdminSeeder`;
 3. `NewsPermissionsSeeder`.
 
-### `RolesAndPermissionsSeeder`
+El primero crea los 44 permisos base, los cuatro roles del enum y sus asignaciones. El segundo crea/reutiliza la cuenta configurada por `SUPER_ADMIN_EMAIL/PASSWORD` y le asigna `super_admin`. El tercero crea los cinco permisos de noticias y el rol `comunicador`.
 
-- Crea todos los permisos definidos en `PermissionName` con guard `api`.
-- Crea los cuatro roles definidos en `RoleName`.
-- Sincroniza permisos específicos para `director`, `responsable_programas` y `tecnico`.
-- Limpia la caché de Spatie antes y después de las operaciones.
+No existen seeders ni factories para unidades, cargos, profesiones, personal o noticias. Solo existe `UserFactory`.
 
-### `SuperAdminSeeder`
+### Instantánea local sin datos sensibles
 
-- Lee correo y contraseña desde `config/simred.php`, respaldado por variables `SUPER_ADMIN_*`.
-- Crea o reutiliza el rol y el usuario.
-- Asigna `super_admin` si todavía no está asociado.
-- Ya no contiene la contraseña escrita directamente en el código.
+| Tabla | Filas |
+|---|---:|
+| `users` | 3 |
+| `staff_members` | 2 |
+| `organizational_units` | 2 |
+| `positions` | 2 |
+| `professions` | 2 |
+| `roles` | 5 |
+| `permissions` | 49 |
+| `role_has_permissions` | 24 |
+| `news`, `news_images`, `news_videos` | 0 |
+| `personal_access_tokens` | 0 |
 
-### `NewsPermissionsSeeder`
+Estos conteos son una fotografía del entorno local al 27 de agosto de 2026 y no forman parte del contrato de la aplicación.
 
-- Crea o reutiliza los cinco permisos de noticias.
-- Crea o reutiliza el rol `comunicador`.
-- Sincroniza todos los permisos de noticias con ese rol.
+## 12. Configuración operativa
 
-No existen seeders para cargos, profesiones ni miembros del personal.
-
-## 10. Configuración y dependencias relevantes
-
-| Área | Implementación |
+| Área | Estado |
 |---|---|
-| Framework | Laravel `^13.8` |
-| Autenticación | `php-open-source-saver/jwt-auth` `^2.9`; Sanctum `^4.0` instalado pero inactivo en rutas |
-| Autorización | `spatie/laravel-permission` `^8.3` |
-| Imágenes | Intervention Image `^4.0` e integración Laravel `^4.1` |
-| Persistencia | PostgreSQL, con `jsonb`, `ILIKE` y restricciones SQL específicas |
-| Frontend incluido | Plantilla Blade mínima, Vite 8 y Tailwind CSS 4 |
-| Pruebas | Pest 5 con configuración base |
+| Routing | Web, API, consola y salud `/up` registrados en `bootstrap/app.php` |
+| Errores API | JSON forzado para `api/*` |
+| Auth | Guard predeterminado `api/jwt` |
+| Permisos | Spatie, guard `api`, sin teams |
+| Persistencia | PostgreSQL; el código depende de `ILIKE`, `jsonb`, regex y SQL `ALTER TABLE` |
+| Caché | Database |
+| Cola | Database; el script `composer dev` ejecuta `queue:listen --tries=1` |
+| Sesión | Database |
+| Archivos | Disco local privado, público y configuración S3 disponible |
+| Media | Disco `public` por defecto |
+| Imágenes | GD por defecto; Intervention configurable |
+| Frontend | Vite + Tailwind; solo plantilla de bienvenida |
 
-`bootstrap/app.php` fuerza respuestas JSON para excepciones de rutas `api/*` y configura el endpoint de salud `/up`.
+## 13. Pruebas
 
-## 11. Funcionalidad implementada frente a estructura preparada
+El proyecto usa Pest 5 y PHPUnit 13. Existen únicamente:
 
-| Área | Estado actual |
+- una prueba Feature que verifica HTTP 200 en `/`;
+- una prueba Unit que verifica `true`;
+- configuración base en `tests/Pest.php`, con `RefreshDatabase` comentado.
+
+`phpunit.xml` configura SQLite en memoria, caché/sesión en arrays y cola síncrona. No hay pruebas de autenticación, permisos, People, usuarios, noticias, multimedia, validaciones, restricciones ni servicios.
+
+## 14. Estado por módulo
+
+| Módulo | Estado |
 |---|---|
-| Estado de la API | Implementado |
-| Ciclo JWT: login, `me`, refresh y logout | Implementado |
-| Límite de intentos de login | Implementado |
-| Roles y permisos base | Esquema, enums y seeders implementados |
-| Noticias administrativas | CRUD implementado y protegido por permisos |
-| Imágenes de noticias | Carga múltiple, conversión, edición, orden y eliminación implementados |
+| Estado API | Implementado |
+| JWT: login, me, logout y refresh | Implementado |
+| Roles y permisos | Implementado, con observaciones |
+| Catálogo de roles | Implementado |
+| Catálogo de permisos | Ruta implementada, permiso requerido ausente |
+| Unidades organizacionales | CRUD administrativo implementado |
+| Cargos | CRUD administrativo implementado |
+| Profesiones | CRUD administrativo implementado |
+| Personal | CRUD administrativo implementado |
+| Usuarios | CRUD parcial y cambio de rol implementados |
+| Acceso directo de usuario | Ruta registrada, acción faltante |
+| Noticias | CRUD administrativo implementado |
+| Imágenes de noticias | Carga, conversión, edición, orden y eliminación implementados |
 | Videos de noticias | Alta, edición, orden y eliminación implementados |
 | Sanctum | Dependencia y tabla presentes; flujo inactivo |
-| Cargos | Modelo y tabla preparados; sin API CRUD |
-| Profesiones | Modelo y tabla preparados; sin API CRUD |
-| Personal | Modelo y tabla preparados; sin API CRUD |
-| Usuarios, roles y permisos | Sin API administrativa propia |
-| Regiones, provincias, municipios, asignaciones y asistencias | Solo nombres de permisos; sin modelos, tablas ni API |
-| Pruebas del dominio | Pendientes; solo existen las pruebas de ejemplo del esqueleto |
+| Regiones, provincias y municipios | Solo permisos; sin modelos, tablas ni API |
+| Asignaciones regionales | Solo permisos; sin modelos, tablas ni API |
+| Asistencias técnicas | Solo permisos; sin modelos, tablas ni API |
+| Pruebas del dominio | No implementadas |
 
-## 12. Observaciones técnicas detectadas
+## 15. Observaciones técnicas verificadas
 
-Estas observaciones describen el código actual; este mapeo no las corrige.
+Estas observaciones describen el código actual; este documento no modifica su comportamiento.
 
-1. **Archivo `.env` versionado:** `.env` no está excluido porque su regla está comentada en `.gitignore` y el archivo aparece en el inventario de Git. Esto puede exponer credenciales y secretos; debe revisarse antes de compartir o publicar el repositorio.
-2. **Sanctum residual:** el paquete y `personal_access_tokens` permanecen, aunque el modelo y las rutas usan únicamente JWT. Conviene confirmar si se conservarán para una integración futura o se retirarán.
-3. **Eliminación física de imágenes:** `NewsImageController` llama a `Log::error()` en el manejo de fallos, pero no importa la fachada `Log`; si la eliminación del archivo lanza una excepción, ese bloque puede fallar con clase no encontrada.
-4. **Borrado lógico de noticias:** eliminar una noticia no elimina sus filas multimedia ni archivos físicos, porque la cascada de la base de datos solo actúa en una eliminación física. Esto puede ser intencional para restauración, pero necesita una política de limpieza definitiva.
-5. **Cobertura de pruebas:** no hay pruebas específicas para autenticación, permisos, noticias, reordenamiento ni procesamiento de imágenes.
-6. **Factories incompletas:** solo existe `UserFactory`; los modelos de personal y comunicación usan `HasFactory` sin factories propias.
-7. **Configuración del superadministrador:** `SuperAdminSeeder` exige `SUPER_ADMIN_NAME`, aunque `users.name` fue eliminado y el valor no se utiliza al crear el usuario.
-8. **Migración de cargos:** `2026_08_08_022340_create_positions_table.php` contiene texto HTML antes de `<?php`, lo que puede producir salida no deseada al cargar la migración.
-9. **Permisos de noticias separados:** los permisos `news.*` y el rol `comunicador` no están integrados en `PermissionName` y `RoleName`; actualmente se administran en un seeder separado.
-10. **Módulos institucionales pendientes:** existen permisos para varias áreas que todavía no tienen persistencia ni endpoints implementados.
+1. **`.env` está versionado.** Las reglas de archivos de entorno están comentadas en `.gitignore`, por lo que `.env` forma parte de los archivos rastreados. Debe retirarse del historial y rotarse cualquier secreto expuesto antes de publicar el repositorio.
+2. **Hay una ruta rota.** `PUT /api/admin/users/{user}/access` apunta a `UserController@updateAccess`, pero ese método no existe. La solicitud terminará en error cuando supere el middleware.
+3. **Las rutas de usuarios están declaradas dos veces.** El segundo bloque reemplaza en la colección efectiva las rutas coincidentes; por eso `route:list` muestra una sola copia. El bloque antiguo conserva la ruta `/access` y el bloque nuevo agrega `/role`.
+4. **Faltan permisos usados por código.** `permissions.view` protege el catálogo de permisos, pero no está en `PermissionName` ni en los seeders; en la práctica solo `super_admin` pasa por el bypass global. `UpdateUserAccessRequest` también exige `permissions.assign`, que tampoco existe.
+5. **`UpdateUserAccessRequest` está huérfano.** Define rol y permisos directos, pero ningún controlador lo importa y `UserService` no implementa sincronización de permisos directos.
+6. **Hay límites de validación mayores que las columnas.** Cargo acepta nombre 150/descripción 255, pero PostgreSQL permite 100/150. Personal acepta nombres 150, apellidos 100, CI 20, complemento 10, teléfono 30 y email 255, mientras la base permite 100, 80, 15, 4, 20 y 254. Entradas válidas para Laravel pueden fallar al persistir.
+7. **CI y complemento tienen validación incompleta en HTTP.** Los Form Requests no replican las regex PostgreSQL; valores inválidos llegan hasta una excepción de base de datos.
+8. **El contrato de apellido paterno difiere.** La base permite `paternal_surname NULL`, pero la API lo exige al crear personal.
+9. **`UserFactory` usa una columna eliminada.** Todavía genera `name`, aunque `users.name` ya no existe; crear usuarios con la factory puede fallar.
+10. **El seeder exige un nombre que no utiliza.** `SuperAdminSeeder` requiere `SUPER_ADMIN_NAME`, pero no lo guarda porque la columna `name` fue eliminada.
+11. **Una migración contiene salida antes de PHP.** La migración de cargos comienza con HTML antes de `<?php`; puede emitir salida al cargarla.
+12. **Falta importar `Log`.** `NewsImageController` llama `Log::error()` en el catch de eliminación física sin importar `Illuminate\Support\Facades\Log`; precisamente el manejo de error puede fallar.
+13. **Sanctum es residual.** El paquete, configuración y tabla existen, pero `HasApiTokens` y la ruta Sanctum están comentados.
+14. **El ciclo de vida multimedia depende del borrado físico.** El soft delete de una noticia conserva filas y archivos. La cascada solo se ejecuta al borrar físicamente; no existe endpoint de restore/force-delete ni tarea de limpieza.
+15. **Las unicidades incluyen soft-deleted.** Correos, nombres/códigos de catálogos, vínculo personal-usuario, CI/complemento y slugs no pueden reutilizarse aunque el registro esté eliminado lógicamente.
+16. **La configuración de pruebas no reproduce PostgreSQL.** Las migraciones contienen `jsonb`, checks regex y SQL PostgreSQL; habilitar `RefreshDatabase` con SQLite en memoria requerirá adaptar la estrategia de pruebas.
+17. **La cobertura es solo la del esqueleto.** No hay pruebas que protejan los 48 endpoints, reglas de autorización, transacciones, reordenamiento o archivos.
+18. **No hay API pública de lectura de noticias.** El único listado existente requiere JWT y `news.view`.
+19. **Las creaciones de noticias y multimedia responden con el estado predeterminado del Resource.** A diferencia de People/usuarios, no fijan explícitamente HTTP 201.
 
-## 13. Cambios reflejados desde el mapeo anterior
+## 16. Conclusión
 
-- Se eliminó `name` de usuarios y se ajustó el modelo.
-- Se alineó `StaffMember` con su migración y se activó `SoftDeletes` en personal y profesiones.
-- Se reemplazó la credencial fija del superadministrador por configuración de entorno.
-- Se agregaron enums, roles, permisos y sus seeders.
-- Se añadió el rate limiter de login.
-- Se desactivó la ruta Sanctum `/api/user` y el trait `HasApiTokens`.
-- Se incorporó el módulo administrativo de noticias con validaciones, recursos, auditoría y autorización.
-- Se incorporó gestión ordenada de imágenes y videos.
-- Se agregó procesamiento de imágenes con variantes WebP, PNG y JPEG.
-- Se añadieron las tres migraciones de comunicación y la configuración multimedia.
+El backend ya no es solo una base de autenticación y noticias: cuenta con un módulo administrativo People, gestión de usuarios, catálogos de acceso y 48 endpoints API efectivos. El modelo de datos principal está desplegado sobre PostgreSQL mediante 14 migraciones y 22 tablas.
 
-## 14. Conclusión
-
-El backend evolucionó de una base centrada en autenticación a una API administrativa con un primer módulo funcional completo: noticias y su contenido multimedia. JWT y la autorización por roles/permisos ya están integrados en las rutas administrativas; el dominio de personal continúa preparado a nivel de persistencia, pero sin endpoints. Las prioridades técnicas visibles son proteger el archivo `.env`, añadir pruebas del dominio, definir el ciclo de vida de archivos multimedia y resolver las observaciones de integración menores antes de ampliar los módulos institucionales.
+Las prioridades técnicas visibles son corregir la ruta de acceso de usuarios y sus permisos ausentes, alinear validaciones con el esquema, retirar secretos versionados, reparar factory/seeder, corregir el manejo de errores multimedia y agregar pruebas compatibles con PostgreSQL antes de ampliar los módulos que hoy solo existen como permisos.
