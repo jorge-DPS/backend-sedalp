@@ -64,6 +64,36 @@ class User extends Authenticatable implements JWTSubject
         return $this->belongsTo(StaffMember::class);
     }
 
+    public function canAccessApi(): bool
+{
+    /*
+     * Las cuentas técnicas pueden existir
+     * sin personal asociado.
+     */
+    if ($this->staff_member_id === null) {
+        return true;
+    }
+
+    /*
+     * Incluimos registros eliminados lógicamente
+     * para poder bloquear también ese caso.
+     */
+    $staffMember = $this
+        ->staffMember()
+        ->withTrashed()
+        ->first();
+
+    if ($staffMember === null) {
+        return false;
+    }
+
+    if ($staffMember->trashed()) {
+        return false;
+    }
+
+    return $staffMember->active === true;
+}
+
     public function getJWTIdentifier(): mixed
     {
         return $this->getKey();

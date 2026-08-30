@@ -18,6 +18,9 @@ class OrganizationalUnit extends Model
         'description',
         'active',
     ];
+    protected $attributes = [
+    'active' => true,
+];
 
     protected function casts(): array
     {

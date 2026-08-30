@@ -31,17 +31,22 @@ class UserController extends Controller
     Request $request
   ): AnonymousResourceCollection {
     $perPage = min(
-      max($request->integer('per_page', 15), 1),
+      max(
+        $request->integer('per_page', 15),
+        1
+      ),
       100
     );
 
     $search = trim(
-      (string) $request->query('search', '')
+      (string) $request->query(
+        'search',
+        ''
+      )
     );
 
     $users = User::query()
       ->with(self::RELATIONS)
-
       ->when(
         $search !== '',
         fn($query) => $query->where(
@@ -50,13 +55,13 @@ class UserController extends Controller
           "%{$search}%"
         )
       )
-
       ->latest('id')
-
       ->paginate($perPage)
       ->withQueryString();
 
-    return UserResource::collection($users);
+    return UserResource::collection(
+      $users
+    );
   }
 
   public function store(
@@ -68,14 +73,18 @@ class UserController extends Controller
 
     return (new UserResource($user))
       ->response()
-      ->setStatusCode(Response::HTTP_CREATED);
+      ->setStatusCode(
+        Response::HTTP_CREATED
+      );
   }
 
   public function show(
     User $user
   ): UserResource {
     return new UserResource(
-      $this->userService->load($user)
+      $this->userService->load(
+        $user
+      )
     );
   }
 
@@ -83,11 +92,14 @@ class UserController extends Controller
     UpdateUserRequest $request,
     User $user
   ): UserResource {
+    $updatedUser = $this->userService->update(
+      actor: $request->user('api'),
+      user: $user,
+      data: $request->validated(),
+    );
+
     return new UserResource(
-      $this->userService->update(
-        $user,
-        $request->validated()
-      )
+      $updatedUser
     );
   }
 
@@ -95,11 +107,14 @@ class UserController extends Controller
     UpdateUserRoleRequest $request,
     User $user
   ): UserResource {
+    $updatedUser = $this->userService->updateRole(
+      actor: $request->user('api'),
+      user: $user,
+      role: $request->validated('role'),
+    );
+
     return new UserResource(
-      $this->userService->updateRole(
-        $user,
-        $request->validated('role')
-      )
+      $updatedUser
     );
   }
 
@@ -107,14 +122,27 @@ class UserController extends Controller
     Request $request,
     User $user
   ): Response|JsonResponse {
-    $authenticatedUser = $request->user('api');
+    $authenticatedUser = $request->user(
+      'api'
+    );
 
+    /*
+         * Ningún usuario puede eliminar
+         * su propia cuenta.
+         */
     if ($authenticatedUser->is($user)) {
       return response()->json([
         'message' => 'No puede eliminar su propia cuenta.',
       ], Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
+    /*
+         * Un usuario normal no puede eliminar
+         * una cuenta super_admin.
+         *
+         * Un super_admin sí puede eliminar
+         * otro super_admin.
+         */
     if (
       $user->hasRole('super_admin')
       && ! $authenticatedUser->hasRole('super_admin')

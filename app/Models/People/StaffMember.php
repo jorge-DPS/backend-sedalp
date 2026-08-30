@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class StaffMember extends Model
 {
-    //
+
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
@@ -28,6 +28,10 @@ class StaffMember extends Model
         'position_id',
         'profession_id',
         'active',
+    ];
+
+    protected $attributes = [
+        'active' => true,
     ];
 
     protected function casts(): array

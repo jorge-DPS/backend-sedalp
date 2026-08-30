@@ -3,11 +3,11 @@
 use App\Models\Communication\News;
 use App\Models\Communication\NewsVideo;
 use App\Models\User;
-use Database\Seeders\NewsPermissionsSeeder;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
-    $this->seed(NewsPermissionsSeeder::class);
+    $this->seed(RolesAndPermissionsSeeder::class);
 
     $this->videoRole = Role::create([
         'name' => 'news_videos_test',

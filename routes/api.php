@@ -26,14 +26,30 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])
         ->middleware('throttle:login');
 
-    Route::middleware('auth:api')->group(function () {
-        Route::get('/me', [AuthController::class, 'me']);
-        Route::post('/logout', [AuthController::class, 'logout']);
-        Route::post('/refresh', [AuthController::class, 'refresh']);
-    });
-});
+    Route::post(
+        '/refresh',
+        [AuthController::class, 'refresh']
+    );
 
-Route::prefix('admin')->middleware('auth:api')->scopeBindings()->group(function () {
+    Route::get(
+        '/me',
+        [AuthController::class, 'me']
+    )->middleware([
+        'auth:api',
+        'account.active',
+    ]);
+
+    Route::post(
+        '/logout',
+        [AuthController::class, 'logout']
+    )->middleware('auth:api');
+});
+Route::prefix('admin')
+    ->middleware([
+        'auth:api',
+        'account.active',
+    ])
+    ->scopeBindings()->group(function () {
 
     // NOTICIAS
 

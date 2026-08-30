@@ -21,23 +21,30 @@ return new class extends Migration
                 ->constrained('users')
                 ->restrictOnDelete();
 
-            $table->string('slug', 255)->unique();
+            $table->string('slug', 255)
+                ->unique();
 
             $table->string('title', 255);
 
-            $table->string('subtitle', 255)->nullable();
+            $table->string('subtitle', 255)
+                ->nullable();
 
             $table->text('excerpt');
 
             $table->text('description');
 
-            // Documento generado por TipTap.
+            /*
+             * Documento generado por TipTap.
+             */
             $table->jsonb('content');
 
             /*
-             * Nullable porque una noticia en borrador
-             * todavía no necesariamente tiene fecha
-             * de publicación.
+             * Puede ser NULL mientras la noticia
+             * no esté publicada.
+             *
+             * PostgreSQL impedirá que una noticia
+             * con status = published tenga esta
+             * columna en NULL.
              */
             $table->date('published_at')
                 ->nullable();
@@ -48,19 +55,54 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['status', 'published_at']);
+            $table->index([
+                'status',
+                'published_at',
+            ]);
+
             $table->index('created_by');
             $table->index('updated_by');
         });
 
         /*
-         * Protección adicional a nivel PostgreSQL.
+         * Solo se permiten los estados definidos
+         * por el dominio de noticias.
          */
-        DB::statement("
+        DB::statement(
+            <<<'SQL'
             ALTER TABLE news
             ADD CONSTRAINT news_status_check
-            CHECK (status IN ('draft', 'published', 'archived'))
-        ");
+            CHECK (
+                status IN (
+                    'draft',
+                    'published',
+                    'archived'
+                )
+            )
+            SQL
+        );
+
+        /*
+         * Invariante de publicación:
+         *
+         * Una noticia publicada siempre debe tener
+         * una fecha de publicación.
+         *
+         * draft     + NULL  = válido
+         * archived  + NULL  = válido
+         * published + fecha = válido
+         * published + NULL  = inválido
+         */
+        DB::statement(
+            <<<'SQL'
+            ALTER TABLE news
+            ADD CONSTRAINT news_published_requires_published_at
+            CHECK (
+                status <> 'published'
+                OR published_at IS NOT NULL
+            )
+            SQL
+        );
     }
 
     public function down(): void

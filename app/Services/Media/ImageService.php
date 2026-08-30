@@ -17,8 +17,7 @@ class ImageService
 {
     public function __construct(
         private readonly ImageManagerInterface $imageManager
-    ) {
-    }
+    ) {}
 
     /**
      * Procesa y almacena una imagen.
@@ -74,17 +73,23 @@ class ImageService
             }
 
             return $filename;
-
         } catch (Throwable $exception) {
 
             /*
-             * Si falla una variante después de
-             * haber creado otra, limpiamos todo.
-             */
-            $this->delete(
-                filename: $filename,
-                directory: $options->directory,
-            );
+     * Si falló el procesamiento o almacenamiento,
+     * intentamos limpiar cualquier variante parcial.
+     *
+     * Si la limpieza también falla, no debemos
+     * ocultar la excepción original.
+     */
+            try {
+                $this->delete(
+                    filename: $filename,
+                    directory: $options->directory,
+                );
+            } catch (Throwable $cleanupException) {
+                report($cleanupException);
+            }
 
             throw $exception;
         }
@@ -112,9 +117,19 @@ class ImageService
             ImageFormat::cases()
         );
 
-        Storage::disk(
+        $deleted = Storage::disk(
             $this->disk()
         )->delete($paths);
+
+        if (! $deleted) {
+            throw new RuntimeException(
+                sprintf(
+                    'No se pudieron eliminar todas las variantes de la imagen [%s] del directorio [%s].',
+                    $filename,
+                    $directory,
+                )
+            );
+        }
     }
 
     /**
@@ -151,17 +166,15 @@ class ImageService
 
             ImageResizeMode::NONE => $image,
 
-            ImageResizeMode::SCALE_DOWN =>
-                $image->scaleDown(
-                    width: $options->width,
-                    height: $options->height,
-                ),
+            ImageResizeMode::SCALE_DOWN => $image->scaleDown(
+                width: $options->width,
+                height: $options->height,
+            ),
 
-            ImageResizeMode::COVER_DOWN =>
-                $image->coverDown(
-                    width: $options->width,
-                    height: $options->height,
-                ),
+            ImageResizeMode::COVER_DOWN => $image->coverDown(
+                width: $options->width,
+                height: $options->height,
+            ),
         };
     }
 
@@ -172,23 +185,20 @@ class ImageService
     ): string {
         $encoded = match ($format) {
 
-            ImageFormat::WEBP =>
-                $image->encodeUsingFormat(
-                    $format->interventionFormat(),
-                    quality: $options->webpQuality,
-                ),
+            ImageFormat::WEBP => $image->encodeUsingFormat(
+                $format->interventionFormat(),
+                quality: $options->webpQuality,
+            ),
 
-            ImageFormat::PNG =>
-                $image->encodeUsingFormat(
-                    $format->interventionFormat(),
-                ),
+            ImageFormat::PNG => $image->encodeUsingFormat(
+                $format->interventionFormat(),
+            ),
 
-            ImageFormat::JPEG =>
-                $image->encodeUsingFormat(
-                    $format->interventionFormat(),
-                    progressive: $options->jpegProgressive,
-                    quality: $options->jpegQuality,
-                ),
+            ImageFormat::JPEG => $image->encodeUsingFormat(
+                $format->interventionFormat(),
+                progressive: $options->jpegProgressive,
+                quality: $options->jpegQuality,
+            ),
         };
 
         return (string) $encoded;

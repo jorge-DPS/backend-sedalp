@@ -4,12 +4,12 @@ use App\Models\Communication\News;
 use App\Models\Communication\NewsImage;
 use App\Models\Communication\NewsVideo;
 use App\Models\User;
-use Database\Seeders\RolesAndPermissionsSeeder;
+use Database\Seeders\NewsPermissionsSeeder;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
-    $this->seed(RolesAndPermissionsSeeder::class);
+    $this->seed(NewsPermissionsSeeder::class);
 
     Storage::fake(
         config('media.disk', 'public')

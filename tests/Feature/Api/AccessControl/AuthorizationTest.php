@@ -1,13 +1,11 @@
 <?php
 
 use App\Models\User;
-use Database\Seeders\NewsPermissionsSeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
     $this->seed(RolesAndPermissionsSeeder::class);
-    $this->seed(NewsPermissionsSeeder::class);
 });
 
 it('rechaza el catálogo de roles sin autenticación', function () {

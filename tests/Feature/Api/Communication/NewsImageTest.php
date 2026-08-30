@@ -3,13 +3,13 @@
 use App\Models\Communication\News;
 use App\Models\Communication\NewsImage;
 use App\Models\User;
-use Database\Seeders\NewsPermissionsSeeder;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
-    $this->seed(NewsPermissionsSeeder::class);
+    $this->seed(RolesAndPermissionsSeeder::class);
 
     $this->role = Role::create([
         'name' => 'news_images_test',

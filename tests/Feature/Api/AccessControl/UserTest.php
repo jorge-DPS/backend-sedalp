@@ -273,3 +273,98 @@ it('elimina un usuario mediante soft delete', function () {
         'id' => $target->id,
     ]);
 });
+
+it('impide a un usuario normal modificar las credenciales de un superadmin', function () {
+    $superAdmin = User::factory()->create([
+        'email' => 'superadmin.update@test.com',
+    ]);
+
+    $superAdmin->assignRole('super_admin');
+
+    $this
+        ->actingAs($this->manager, 'api')
+        ->patchJson(
+            "/api/admin/users/{$superAdmin->id}",
+            [
+                'email' => 'modificado@test.com',
+            ]
+        )
+        ->assertForbidden();
+
+    $this->assertDatabaseHas('users', [
+        'id' => $superAdmin->id,
+        'email' => 'superadmin.update@test.com',
+    ]);
+});
+
+it('impide a un usuario normal degradar un superadmin', function () {
+    $superAdmin = User::factory()->create();
+
+    $superAdmin->assignRole('super_admin');
+
+    $this
+        ->actingAs($this->manager, 'api')
+        ->putJson(
+            "/api/admin/users/{$superAdmin->id}/role",
+            [
+                'role' => 'tecnico',
+            ]
+        )
+        ->assertForbidden();
+
+    $superAdmin->refresh();
+
+    expect(
+        $superAdmin->hasRole('super_admin')
+    )->toBeTrue();
+});
+
+it('impide que un superadmin se quite su propio rol', function () {
+    $superAdmin = User::factory()->create();
+
+    $superAdmin->assignRole('super_admin');
+
+    $this
+        ->actingAs($superAdmin, 'api')
+        ->putJson(
+            "/api/admin/users/{$superAdmin->id}/role",
+            [
+                'role' => 'tecnico',
+            ]
+        )
+        ->assertUnprocessable();
+
+    $superAdmin->refresh();
+
+    expect(
+        $superAdmin->hasRole('super_admin')
+    )->toBeTrue();
+});
+
+it('permite que un superadmin modifique a otro superadmin', function () {
+    $actor = User::factory()->create([
+        'email' => 'superadmin.actor@test.com',
+    ]);
+
+    $target = User::factory()->create([
+        'email' => 'superadmin.target@test.com',
+    ]);
+
+    $actor->assignRole('super_admin');
+    $target->assignRole('super_admin');
+
+    $this
+        ->actingAs($actor, 'api')
+        ->patchJson(
+            "/api/admin/users/{$target->id}",
+            [
+                'email' => 'superadmin.nuevo@test.com',
+            ]
+        )
+        ->assertOk();
+
+    $this->assertDatabaseHas('users', [
+        'id' => $target->id,
+        'email' => 'superadmin.nuevo@test.com',
+    ]);
+});

@@ -18,6 +18,10 @@ class Position extends Model
         'active',
     ];
 
+    protected $attributes = [
+        'active' => true,
+    ];
+
     protected function casts(): array
     {
         return [
