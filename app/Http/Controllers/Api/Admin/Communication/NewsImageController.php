@@ -10,7 +10,6 @@ use App\Http\Resources\Communication\NewsImageResource;
 use App\Models\Communication\News;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 use App\DTOs\Media\ImageOptions;
@@ -18,6 +17,8 @@ use App\Enums\Media\ImageFormat;
 use App\Enums\Media\ImageResizeMode;
 use App\Models\Communication\NewsImage;
 use App\Services\Media\ImageService;
+
+use Illuminate\Support\Facades\Log;
 
 
 class NewsImageController extends Controller

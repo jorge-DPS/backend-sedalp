@@ -19,8 +19,6 @@ use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 use App\Models\Communication\News;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-// #[Fillable(['name', 'email', 'password'])]
-// #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
@@ -38,7 +36,7 @@ class User extends Authenticatable implements JWTSubject
 
     protected $fillable = [
         'staff_member_id',
-        // 'name',
+
         'email',
         'password',
     ];

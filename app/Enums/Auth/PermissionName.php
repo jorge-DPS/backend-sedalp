@@ -33,6 +33,10 @@ enum PermissionName: string
     case ROLES_CREATE = 'roles.create';
     case ROLES_UPDATE = 'roles.update';
     case ROLES_DELETE = 'roles.delete';
+    case ROLES_ASSIGN = 'roles.assign';
+
+    // Permisos
+    case PERMISSIONS_VIEW = 'permissions.view';
 
     // Regiones
     case REGIONS_VIEW = 'regions.view';
@@ -69,5 +73,4 @@ enum PermissionName: string
     case ORGANIZATIONAL_UNITS_UPDATE = 'organizational_units.update';
     case ORGANIZATIONAL_UNITS_DELETE = 'organizational_units.delete';
 
-    case ROLES_ASSIGN = 'roles.assign';
 }

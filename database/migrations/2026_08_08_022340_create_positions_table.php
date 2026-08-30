@@ -1,5 +1,3 @@
-<!-- migracion de Cargo -->
-
 <?php
 
 use Illuminate\Database\Migrations\Migration;

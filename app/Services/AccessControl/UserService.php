@@ -7,14 +7,6 @@ use Illuminate\Support\Facades\DB;
 
 class UserService
 {
-  //   private const RELATIONS = [
-  //     'staffMember.organizationalUnit',
-  //     'staffMember.position',
-  //     'staffMember.profession',
-  //     'roles.permissions',
-  //     'permissions',
-  //   ];
-
   private const RELATIONS = [
     'staffMember.organizationalUnit',
     'staffMember.position',

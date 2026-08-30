@@ -9,12 +9,17 @@ use Spatie\Permission\PermissionRegistrar;
 
 class NewsPermissionsSeeder extends Seeder
 {
+    private const GUARD = 'api';
+
     public function run(): void
     {
         app(PermissionRegistrar::class)
             ->forgetCachedPermissions();
 
-        $permissionNames = [
+        /*
+         * Permisos operativos del comunicador.
+         */
+        $communicatorPermissionNames = [
             'news.view',
             'news.create',
             'news.update',
@@ -22,20 +27,41 @@ class NewsPermissionsSeeder extends Seeder
             'news.publish',
         ];
 
-        $permissions = collect($permissionNames)
-            ->map(function (string $name) {
-                return Permission::firstOrCreate([
-                    'name' => $name,
-                    'guard_name' => 'api',
-                ]);
-            });
+        /*
+         * Permisos administrativos / sistemas.
+         *
+         * Se crean, pero NO se asignan al comunicador.
+         */
+        $systemPermissionNames = [
+            'news.trash.view',
+            'news.restore',
+            'news.force_delete',
+        ];
 
-        $communicator = Role::firstOrCreate([
-            'name' => 'comunicador',
-            'guard_name' => 'api',
-        ]);
+        $communicatorPermissions = collect(
+            $communicatorPermissionNames
+        )->map(
+            fn (string $name) => Permission::findOrCreate(
+                $name,
+                self::GUARD
+            )
+        );
 
-        $communicator->syncPermissions($permissions);
+        foreach ($systemPermissionNames as $name) {
+            Permission::findOrCreate(
+                $name,
+                self::GUARD
+            );
+        }
+
+        $communicator = Role::findOrCreate(
+            'comunicador',
+            self::GUARD
+        );
+
+        $communicator->syncPermissions(
+            $communicatorPermissions
+        );
 
         app(PermissionRegistrar::class)
             ->forgetCachedPermissions();

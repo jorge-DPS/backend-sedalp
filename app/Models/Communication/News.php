@@ -2,7 +2,7 @@
 
 namespace App\Models\Communication;
 
-use App\Enums\Communication\NewsStatus;;;
+use App\Enums\Communication\NewsStatus;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
