@@ -7,95 +7,84 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class UserResource extends JsonResource
 {
-  public function toArray(Request $request): array
-  {
-    return [
-      'id' => $this->id,
-      'email' => $this->email,
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'email' => $this->email,
 
-      'staff_member' => $this->whenLoaded(
-        'staffMember',
-        function () {
-          if (! $this->staffMember) {
-            return null;
-          }
+            'staff_member' => $this->whenLoaded(
+                'staffMember',
+                function () {
+                    if (! $this->staffMember) {
+                        return null;
+                    }
 
-          return [
-            'id' => $this->staffMember->id,
+                    return [
+                        'id' => $this->staffMember->id,
 
-            'first_names' => $this->staffMember->first_names,
+                        'first_names' => $this->staffMember->first_names,
 
-            'paternal_surname' =>
-            $this->staffMember->paternal_surname,
+                        'paternal_surname' => $this->staffMember->paternal_surname,
 
-            'maternal_surname' =>
-            $this->staffMember->maternal_surname,
+                        'maternal_surname' => $this->staffMember->maternal_surname,
 
-            'organizational_unit' =>
-            $this->staffMember->organizationalUnit
-              ? [
-                'id' =>
-                $this->staffMember
-                  ->organizationalUnit
-                  ->id,
+                        'organizational_unit' => $this->staffMember->organizationalUnit
+                          ? [
+                              'id' => $this->staffMember
+                                  ->organizationalUnit
+                                  ->id,
 
-                'name' =>
-                $this->staffMember
-                  ->organizationalUnit
-                  ->name,
-              ]
-              : null,
+                              'name' => $this->staffMember
+                                  ->organizationalUnit
+                                  ->name,
+                          ]
+                          : null,
 
-            'position' =>
-            $this->staffMember->position
-              ? [
-                'id' =>
-                $this->staffMember
-                  ->position
-                  ->id,
+                        'position' => $this->staffMember->position
+                          ? [
+                              'id' => $this->staffMember
+                                  ->position
+                                  ->id,
 
-                'name' =>
-                $this->staffMember
-                  ->position
-                  ->name,
-              ]
-              : null,
+                              'name' => $this->staffMember
+                                  ->position
+                                  ->name,
+                          ]
+                          : null,
 
-            'profession' =>
-            $this->staffMember->profession
-              ? [
-                'id' =>
-                $this->staffMember
-                  ->profession
-                  ->id,
+                        'profession' => $this->staffMember->profession
+                          ? [
+                              'id' => $this->staffMember
+                                  ->profession
+                                  ->id,
 
-                'name' =>
-                $this->staffMember
-                  ->profession
-                  ->name,
-              ]
-              : null,
-          ];
-        }
-      ),
+                              'name' => $this->staffMember
+                                  ->profession
+                                  ->name,
+                          ]
+                          : null,
+                    ];
+                }
+            ),
 
-      'roles' => $this->whenLoaded(
-        'roles',
-        fn() => $this->roles
-          ->pluck('name')
-          ->values()
-      ),
+            'roles' => $this->whenLoaded(
+                'roles',
+                fn () => $this->roles
+                    ->pluck('name')
+                    ->values()
+            ),
 
-      'permissions' => $this->whenLoaded(
-        'roles',
-        fn() => $this->getAllPermissions()
-          ->pluck('name')
-          ->sort()
-          ->values()
-      ),
+            'permissions' => $this->whenLoaded(
+                'roles',
+                fn () => $this->getAllPermissions()
+                    ->pluck('name')
+                    ->sort()
+                    ->values()
+            ),
 
-      'created_at' => $this->created_at,
-      'updated_at' => $this->updated_at,
-    ];
-  }
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
+        ];
+    }
 }

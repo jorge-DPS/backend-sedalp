@@ -30,11 +30,11 @@ return new class extends Migration
             ]);
         });
 
-        DB::statement("
+        DB::statement('
             ALTER TABLE news_videos
             ADD CONSTRAINT news_videos_position_check
             CHECK (position >= 0)
-        ");
+        ');
     }
 
     public function down(): void

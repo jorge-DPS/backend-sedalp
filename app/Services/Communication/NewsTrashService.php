@@ -20,8 +20,7 @@ class NewsTrashService
 
     public function __construct(
         private readonly ImageService $imageService
-    ) {
-    }
+    ) {}
 
     public function restore(
         News $news,

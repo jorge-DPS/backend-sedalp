@@ -22,8 +22,7 @@ class NewsTrashController extends Controller
 
     public function __construct(
         private readonly NewsTrashService $newsTrashService
-    ) {
-    }
+    ) {}
 
     public function index(
         IndexNewsTrashRequest $request

@@ -1,11 +1,15 @@
 <?php
 
+use App\Jobs\Media\CleanupNewsImageFiles;
 use App\Models\Communication\News;
 use App\Models\Communication\NewsImage;
 use App\Models\User;
+use App\Services\Media\ImageService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
@@ -41,7 +45,7 @@ beforeEach(function () {
 
 function createNewsForMediaTest(User $creator): News
 {
-    $news = new News();
+    $news = new News;
 
     $news->fill([
         'title' => 'Noticia multimedia',
@@ -346,6 +350,7 @@ it('elimina una imagen y normaliza las posiciones', function () {
         ->assertJson([
             'success' => true,
             'message' => 'Imagen eliminada correctamente.',
+            'media_cleanup_pending' => false,
         ]);
 
     $this->assertDatabaseMissing('news_images', [
@@ -361,4 +366,66 @@ it('elimina una imagen y normaliza las posiciones', function () {
         'id' => $third->id,
         'position' => 1,
     ]);
+});
+it('encola la limpieza cuando falla la eliminación física de una imagen', function () {
+    Queue::fake();
+
+    $image = createImageForMediaTest(
+        $this->news,
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        0
+    );
+
+    $imageService = Mockery::mock(
+        ImageService::class
+    );
+
+    $imageService
+        ->shouldReceive('delete')
+        ->once()
+        ->with(
+            'cccccccc-cccc-cccc-cccc-cccccccccccc',
+            NewsImage::MEDIA_DIRECTORY,
+        )
+        ->andThrow(
+            new RuntimeException(
+                'Storage no disponible.'
+            )
+        );
+
+    $this->app->instance(
+        ImageService::class,
+        $imageService
+    );
+
+    $this
+        ->actingAs($this->user, 'api')
+        ->deleteJson(
+            "/api/admin/news/{$this->news->id}/images/{$image->id}"
+        )
+        ->assertOk()
+        ->assertJson([
+            'success' => true,
+            'message' => 'Imagen eliminada correctamente.',
+            'media_cleanup_pending' => true,
+        ]);
+
+    $this->assertDatabaseMissing(
+        'news_images',
+        [
+            'id' => $image->id,
+        ]
+    );
+
+    Queue::assertPushed(
+        CleanupNewsImageFiles::class,
+        function (
+            CleanupNewsImageFiles $job
+        ): bool {
+            return $job->filename
+                === 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+                && $job->directory
+                === NewsImage::MEDIA_DIRECTORY;
+        }
+    );
 });

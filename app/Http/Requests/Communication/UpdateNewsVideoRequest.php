@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Communication;
 
+use App\Rules\YouTubeUrl;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateNewsVideoRequest extends FormRequest
@@ -9,17 +10,20 @@ class UpdateNewsVideoRequest extends FormRequest
     public function authorize(): bool
     {
         return $this->user('api')?->can('news.update')
-            ?? false;
+          ?? false;
     }
 
     public function rules(): array
     {
         return [
             'youtube_url' => [
+                'bail',
                 'sometimes',
                 'required',
-                'url',
+                'string',
                 'max:2048',
+                'url:http,https',
+                new YouTubeUrl,
             ],
 
             'title' => [

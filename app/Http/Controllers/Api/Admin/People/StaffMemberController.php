@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api\Admin\People;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\People\IndexStaffMemberRequest;
 use App\Http\Requests\People\StoreStaffMemberRequest;
 use App\Http\Requests\People\UpdateStaffMemberRequest;
 use App\Http\Resources\People\StaffMemberResource;
 use App\Models\People\StaffMember;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
@@ -21,22 +21,23 @@ class StaffMemberController extends Controller
         'user',
     ];
 
-    public function index(Request $request): AnonymousResourceCollection
-    {
-        $perPage = min(
-            max($request->integer('per_page', 15), 1),
-            100
-        );
+    public function index(
+        IndexStaffMemberRequest $request
+    ): AnonymousResourceCollection {
+        $filters = $request->validated();
 
-        $search = trim(
-            (string) $request->query('search', '')
+        $search = $filters['search'] ?? null;
+
+        $perPage = (int) (
+            $filters['per_page']
+            ?? 15
         );
 
         $staff = StaffMember::query()
             ->with(self::RELATIONS)
 
             ->when(
-                $search !== '',
+                filled($search),
                 function ($query) use ($search) {
                     $query->where(
                         function ($query) use ($search) {
@@ -72,34 +73,37 @@ class StaffMemberController extends Controller
             )
 
             ->when(
-                $request->filled('organizational_unit_id'),
+                isset($filters['organizational_unit_id']),
                 fn ($query) => $query->where(
                     'organizational_unit_id',
-                    $request->integer('organizational_unit_id')
+                    $filters['organizational_unit_id']
                 )
             )
 
             ->when(
-                $request->filled('position_id'),
+                isset($filters['position_id']),
                 fn ($query) => $query->where(
                     'position_id',
-                    $request->integer('position_id')
+                    $filters['position_id']
                 )
             )
 
             ->when(
-                $request->filled('profession_id'),
+                isset($filters['profession_id']),
                 fn ($query) => $query->where(
                     'profession_id',
-                    $request->integer('profession_id')
+                    $filters['profession_id']
                 )
             )
 
             ->when(
-                $request->has('active'),
+                array_key_exists(
+                    'active',
+                    $filters
+                ),
                 fn ($query) => $query->where(
                     'active',
-                    $request->boolean('active')
+                    $filters['active']
                 )
             )
 
@@ -109,7 +113,9 @@ class StaffMemberController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        return StaffMemberResource::collection($staff);
+        return StaffMemberResource::collection(
+            $staff
+        );
     }
 
     public function store(
@@ -123,7 +129,9 @@ class StaffMemberController extends Controller
 
         return (new StaffMemberResource($staffMember))
             ->response()
-            ->setStatusCode(Response::HTTP_CREATED);
+            ->setStatusCode(
+                Response::HTTP_CREATED
+            );
     }
 
     public function show(

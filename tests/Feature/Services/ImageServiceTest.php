@@ -5,7 +5,6 @@ use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\Interfaces\ImageManagerInterface;
 use Mockery\MockInterface;
-use RuntimeException;
 
 it('detecta cuando falla la eliminación física de una imagen', function () {
     $disk = Mockery::mock(

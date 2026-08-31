@@ -252,3 +252,226 @@ it('elimina personal mediante soft delete', function () {
         'id' => $staff->id,
     ]);
 });
+
+it('rechaza listar personal sin permiso', function () {
+    $user = User::factory()->create();
+
+    $this
+        ->actingAs($user, 'api')
+        ->getJson('/api/admin/staff-members')
+        ->assertForbidden();
+});
+
+it('normaliza y aplica el filtro search al listar personal', function () {
+    $matchingStaff = StaffMember::create(
+        $this->validStaffData
+    );
+
+    $otherData = $this->validStaffData;
+    $otherData['first_names'] = 'María Elena';
+    $otherData['paternal_surname'] = 'Quispe';
+    $otherData['maternal_surname'] = 'Flores';
+    $otherData['ci'] = '87654321';
+    $otherData['ci_complement'] = null;
+    $otherData['email'] = 'maria@example.com';
+
+    $otherStaff = StaffMember::create(
+        $otherData
+    );
+
+    $response = $this
+        ->actingAs($this->user, 'api')
+        ->getJson(
+            '/api/admin/staff-members?search=%20%20Juan%20%20'
+        )
+        ->assertOk();
+
+    $ids = collect(
+        $response->json('data')
+    )->pluck('id');
+
+    expect($ids)
+        ->toContain($matchingStaff->id)
+        ->not->toContain($otherStaff->id);
+});
+
+it('filtra personal por unidad organizacional cargo y profesión', function () {
+    $matchingStaff = StaffMember::create(
+        $this->validStaffData
+    );
+
+    $otherUnit = OrganizationalUnit::create([
+        'name' => 'Otra Unidad',
+        'code' => 'OTHER_UNIT',
+        'active' => true,
+    ]);
+
+    $otherPosition = Position::create([
+        'name' => 'Otro Cargo',
+        'active' => true,
+    ]);
+
+    $otherProfession = Profession::create([
+        'name' => 'Otra Profesión',
+        'active' => true,
+    ]);
+
+    $otherData = $this->validStaffData;
+    $otherData['first_names'] = 'María';
+    $otherData['ci'] = '87654321';
+    $otherData['ci_complement'] = null;
+    $otherData['email'] = 'maria@example.com';
+    $otherData['organizational_unit_id'] = $otherUnit->id;
+    $otherData['position_id'] = $otherPosition->id;
+    $otherData['profession_id'] = $otherProfession->id;
+
+    $otherStaff = StaffMember::create(
+        $otherData
+    );
+
+    foreach ([
+        'organizational_unit_id' => $this->organizationalUnit->id,
+        'position_id' => $this->position->id,
+        'profession_id' => $this->profession->id,
+    ] as $filter => $value) {
+        $response = $this
+            ->actingAs($this->user, 'api')
+            ->getJson(
+                "/api/admin/staff-members?{$filter}={$value}"
+            )
+            ->assertOk();
+
+        $ids = collect(
+            $response->json('data')
+        )->pluck('id');
+
+        expect($ids)
+            ->toContain($matchingStaff->id)
+            ->not->toContain($otherStaff->id);
+    }
+});
+
+it('permite filtrar personal por un catálogo inactivo asociado', function () {
+    $staff = StaffMember::create(
+        $this->validStaffData
+    );
+
+    $this->position->update([
+        'active' => false,
+    ]);
+
+    $response = $this
+        ->actingAs($this->user, 'api')
+        ->getJson(
+            "/api/admin/staff-members?position_id={$this->position->id}"
+        )
+        ->assertOk();
+
+    $ids = collect(
+        $response->json('data')
+    )->pluck('id');
+
+    expect($ids)
+        ->toContain($staff->id);
+});
+
+it('filtra personal inactivo', function () {
+    $activeStaff = StaffMember::create(
+        $this->validStaffData
+    );
+
+    $inactiveData = $this->validStaffData;
+    $inactiveData['first_names'] = 'Personal Inactivo';
+    $inactiveData['ci'] = '87654321';
+    $inactiveData['ci_complement'] = null;
+    $inactiveData['email'] = 'inactivo@example.com';
+    $inactiveData['active'] = false;
+
+    $inactiveStaff = StaffMember::create(
+        $inactiveData
+    );
+
+    $response = $this
+        ->actingAs($this->user, 'api')
+        ->getJson(
+            '/api/admin/staff-members?active=false'
+        )
+        ->assertOk();
+
+    $ids = collect(
+        $response->json('data')
+    )->pluck('id');
+
+    expect($ids)
+        ->toContain($inactiveStaff->id)
+        ->not->toContain($activeStaff->id);
+});
+
+it('rechaza filtros inválidos al listar personal', function () {
+    $this
+        ->actingAs($this->user, 'api')
+        ->getJson(
+            '/api/admin/staff-members?active=invalido'
+        )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(
+            'active'
+        );
+
+    $this
+        ->actingAs($this->user, 'api')
+        ->getJson(
+            '/api/admin/staff-members?organizational_unit_id=999999999'
+        )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(
+            'organizational_unit_id'
+        );
+
+    $this
+        ->actingAs($this->user, 'api')
+        ->getJson(
+            '/api/admin/staff-members?position_id=999999999'
+        )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(
+            'position_id'
+        );
+
+    $this
+        ->actingAs($this->user, 'api')
+        ->getJson(
+            '/api/admin/staff-members?profession_id=999999999'
+        )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(
+            'profession_id'
+        );
+});
+
+it('rechaza paginación inválida al listar personal', function () {
+    foreach (['abc', '0', '101'] as $perPage) {
+        $this
+            ->actingAs($this->user, 'api')
+            ->getJson(
+                "/api/admin/staff-members?per_page={$perPage}"
+            )
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(
+                'per_page'
+            );
+    }
+});
+
+it('acepta el límite máximo de paginación al listar personal', function () {
+    $this
+        ->actingAs($this->user, 'api')
+        ->getJson(
+            '/api/admin/staff-members?per_page=100'
+        )
+        ->assertOk()
+        ->assertJsonPath(
+            'meta.per_page',
+            100
+        );
+});

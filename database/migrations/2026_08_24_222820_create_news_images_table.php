@@ -44,11 +44,11 @@ return new class extends Migration
             ]);
         });
 
-        DB::statement("
+        DB::statement('
             ALTER TABLE news_images
             ADD CONSTRAINT news_images_position_check
             CHECK (position >= 0)
-        ");
+        ');
     }
 
     public function down(): void

@@ -2,322 +2,330 @@
 
 namespace App\Http\Controllers\Api\Admin\Communication;
 
+use App\DTOs\Media\ImageOptions;
+use App\Enums\Media\ImageFormat;
+use App\Enums\Media\ImageResizeMode;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Communication\ReorderNewsMediaRequest;
 use App\Http\Requests\Communication\StoreNewsImagesRequest;
 use App\Http\Requests\Communication\UpdateNewsImageRequest;
 use App\Http\Resources\Communication\NewsImageResource;
+use App\Jobs\Media\CleanupNewsImageFiles;
 use App\Models\Communication\News;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use Throwable;
-
-use App\DTOs\Media\ImageOptions;
-use App\Enums\Media\ImageFormat;
-use App\Enums\Media\ImageResizeMode;
 use App\Models\Communication\NewsImage;
 use App\Services\Media\ImageService;
-
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-
+use Throwable;
 
 class NewsImageController extends Controller
 {
-  public function __construct(
-    private readonly ImageService $imageService
-  ) {}
-  public function store(
-    StoreNewsImagesRequest $request,
-    News $news
-  ) {
-    $validated = $request->validated();
+    public function __construct(
+        private readonly ImageService $imageService
+    ) {}
 
-    $createdImages = [];
+    public function store(
+        StoreNewsImagesRequest $request,
+        News $news
+    ) {
+        $validated = $request->validated();
 
-    $options = new ImageOptions(
+        $createdImages = [];
 
-      /*
-             * Vue NO manda esto.
-             *
-             * Laravel decide dónde guardar.
-             */
-      directory: NewsImage::MEDIA_DIRECTORY,
+        $options = new ImageOptions(
 
-      width: 1920,
-
-      resizeMode: ImageResizeMode::SCALE_DOWN,
-
-      formats: [
-        ImageFormat::WEBP,
-        ImageFormat::PNG,
-        ImageFormat::JPEG,
-      ],
-
-      webpQuality: 80,
-
-      jpegQuality: 82,
-
-      jpegProgressive: true,
-    );
-
-    try {
-
-      DB::transaction(function () use ($request, $news, $validated, $options, &$createdImages) {
-
-        $this->lockNewsForMediaMutation($news);
-        $position = (
-          $news->images()
-          ->max('position') ?? -1
-        ) + 1;
-
-        foreach ($validated['images'] as $imageData) {
-
-          $filename = $this
-            ->imageService
-            ->store(
-              file: $imageData['file'],
-              options: $options,
-            );
-
-          $createdImages[] = $filename;
-
-          $news->images()->create([
-            'filename' => $filename,
-
-            'alt' => $imageData['alt'],
-
-            'caption' =>
-            $imageData['caption']
-              ?? null,
-
-            'position' => $position++,
-          ]);
-        }
-
-        $news->updated_by = $request
-          ->user('api')
-          ->id;
-
-        $news->save();
-      });
-    } catch (\Throwable $exception) {
-
-      /*
-             * PostgreSQL hace rollback,
-             * pero Storage no.
-             *
-             * Por eso debemos limpiar
-             * las imágenes generadas.
-             */
-      foreach ($createdImages as $filename) {
-        try {
-          $this->imageService->delete(
-            filename: $filename,
+            /*
+                   * Vue NO manda esto.
+                   *
+                   * Laravel decide dónde guardar.
+                   */
             directory: NewsImage::MEDIA_DIRECTORY,
-          );
-        } catch (Throwable $cleanupException) {
-          Log::error(
-            'No se pudo limpiar una imagen después de un rollback.',
-            [
-              'news_id' => $news->id,
-              'filename' => $filename,
-              'exception' => $cleanupException->getMessage(),
-            ]
-          );
-        }
-      }
 
-      throw $exception;
+            width: 1920,
+
+            resizeMode: ImageResizeMode::SCALE_DOWN,
+
+            formats: [
+                ImageFormat::WEBP,
+                ImageFormat::PNG,
+                ImageFormat::JPEG,
+            ],
+
+            webpQuality: 80,
+
+            jpegQuality: 82,
+
+            jpegProgressive: true,
+        );
+
+        try {
+
+            DB::transaction(function () use ($request, $news, $validated, $options, &$createdImages) {
+
+                $this->lockNewsForMediaMutation($news);
+                $position = (
+                    $news->images()
+                        ->max('position') ?? -1
+                ) + 1;
+
+                foreach ($validated['images'] as $imageData) {
+
+                    $filename = $this
+                        ->imageService
+                        ->store(
+                            file: $imageData['file'],
+                            options: $options,
+                        );
+
+                    $createdImages[] = $filename;
+
+                    $news->images()->create([
+                        'filename' => $filename,
+
+                        'alt' => $imageData['alt'],
+
+                        'caption' => $imageData['caption']
+                          ?? null,
+
+                        'position' => $position++,
+                    ]);
+                }
+
+                $news->updated_by = $request
+                    ->user('api')
+                    ->id;
+
+                $news->save();
+            });
+        } catch (Throwable $exception) {
+
+            /*
+                   * PostgreSQL hace rollback,
+                   * pero Storage no.
+                   *
+                   * Por eso debemos limpiar
+                   * las imágenes generadas.
+                   */
+            foreach ($createdImages as $filename) {
+                try {
+                    $this->imageService->delete(
+                        filename: $filename,
+                        directory: NewsImage::MEDIA_DIRECTORY,
+                    );
+                } catch (Throwable $cleanupException) {
+                    Log::error(
+                        'No se pudo limpiar una imagen después de un rollback.',
+                        [
+                            'news_id' => $news->id,
+                            'filename' => $filename,
+                            'exception' => $cleanupException->getMessage(),
+                        ]
+                    );
+                }
+            }
+
+            throw $exception;
+        }
+
+        return NewsImageResource::collection(
+            $news->fresh()->images
+        );
     }
 
-    return NewsImageResource::collection(
-      $news->fresh()->images
-    );
-  }
+    public function update(
+        UpdateNewsImageRequest $request,
+        News $news,
+        NewsImage $image
+    ): NewsImageResource {
+        $image->update(
+            $request->validated()
+        );
 
-  public function update(
-    UpdateNewsImageRequest $request,
-    News $news,
-    NewsImage $image
-  ): NewsImageResource {
-    $image->update(
-      $request->validated()
-    );
+        $news->updated_by = $request
+            ->user('api')
+            ->id;
 
-    $news->updated_by = $request
-      ->user('api')
-      ->id;
+        $news->save();
 
-    $news->save();
+        return new NewsImageResource($image);
+    }
 
-    return new NewsImageResource($image);
-  }
-
-  public function destroy(
-    News $news,
-    NewsImage $image
-  ): JsonResponse {
-    /*
+    public function destroy(
+        News $news,
+        NewsImage $image
+    ): JsonResponse {
+        /*
          * Protección adicional:
          * la imagen debe pertenecer a la noticia
          * indicada en la URL.
          */
-    abort_unless(
-      $image->news_id === $news->id,
-      404
-    );
+        abort_unless(
+            $image->news_id === $news->id,
+            404
+        );
 
-    $filename = $image->filename;
+        $filename = $image->filename;
 
-    DB::transaction(function () use ($news, $image) {
-      $this->lockNewsForMediaMutation($news);
-      $image->delete();
+        DB::transaction(function () use (
+            $news,
+            $image
+        ): void {
+            $this->lockNewsForMediaMutation($news);
 
-      $this->normalizePositions($news);
+            $image->delete();
 
-      $news->updated_by = auth('api')->id();
-      $news->save();
-    });
+            $this->normalizePositions($news);
 
-    /*
-         * La base de datos ya quedó consistente.
+            $news->updated_by = auth('api')->id();
+            $news->save();
+        });
+
+        /*
+         * PostgreSQL ya confirmó la eliminación
+         * y normalización de posiciones.
          *
-         * Ahora eliminamos físicamente las variantes.
+         * Intentamos eliminar los archivos físicos
+         * inmediatamente.
+         *
+         * Si Storage falla, persistimos el trabajo
+         * en la cola para reintentar posteriormente.
          */
-    try {
-      $this->imageService->delete(
-        filename: $filename,
-        directory: NewsImage::MEDIA_DIRECTORY,
-      );
-    } catch (Throwable $exception) {
-      /*
-             * No hacemos fallar la eliminación lógica
-             * de la imagen porque la BD ya hizo commit.
-             *
-             * Registramos el problema para poder limpiar
-             * posteriormente un posible archivo huérfano.
-             */
-      Log::error(
-        'No se pudieron eliminar archivos físicos de una imagen de noticia.',
-        [
-          'news_id' => $news->id,
-          'filename' => $filename,
-          'exception' => $exception->getMessage(),
-        ]
-      );
+        $mediaCleanupPending = false;
+
+        try {
+            $this->imageService->delete(
+                filename: $filename,
+                directory: NewsImage::MEDIA_DIRECTORY,
+            );
+        } catch (Throwable $exception) {
+            $mediaCleanupPending = true;
+
+            Log::error(
+                'No se pudieron eliminar inmediatamente los archivos físicos de una imagen de noticia.',
+                [
+                    'news_id' => $news->id,
+                    'filename' => $filename,
+                    'exception' => $exception->getMessage(),
+                ]
+            );
+
+            CleanupNewsImageFiles::dispatch(
+                filename: $filename,
+                directory: NewsImage::MEDIA_DIRECTORY,
+            );
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Imagen eliminada correctamente.',
+            'media_cleanup_pending' => $mediaCleanupPending,
+        ]);
     }
 
-    return response()->json([
-      'success' => true,
-      'message' => 'Imagen eliminada correctamente.',
-    ]);
-  }
-
-
-
-  public function reorder(
-    ReorderNewsMediaRequest $request,
-    News $news
-  ) {
-    $items = collect(
-      $request->validated('items')
-    );
-
-    $requestIds = $items
-      ->pluck('id')
-      ->sort()
-      ->values();
-
-    $positions = $items
-      ->pluck('position')
-      ->sort()
-      ->values()
-      ->all();
-
-    $expectedPositions = range(
-      0,
-      $items->count() - 1
-    );
-
-    abort_unless(
-      $positions === $expectedPositions,
-      422,
-      'Las posiciones deben ser consecutivas desde 0.'
-    );
-
-    DB::transaction(function () use (
-      $request,
-      $news,
-      $items,
-      $requestIds
+    public function reorder(
+        ReorderNewsMediaRequest $request,
+        News $news
     ) {
-      $this->lockNewsForMediaMutation($news);
+        $items = collect(
+            $request->validated('items')
+        );
 
-      /*
-         * Comprobamos el conjunto real después
-         * de obtener el lock.
-         */
-      $currentIds = $news
-        ->images()
-        ->pluck('id')
-        ->sort()
-        ->values();
+        $requestIds = $items
+            ->pluck('id')
+            ->sort()
+            ->values();
 
-      abort_unless(
-        $currentIds->all() === $requestIds->all(),
-        422,
-        'Debe enviar todas las imágenes de la noticia.'
-      );
+        $positions = $items
+            ->pluck('position')
+            ->sort()
+            ->values()
+            ->all();
 
-      /*
-         * Posiciones temporales para evitar
-         * UNIQUE(news_id, position).
-         */
-      foreach ($items->values() as $index => $item) {
-        NewsImage::whereKey($item['id'])
-          ->update([
-            'position' => 1_000_000 + $index,
-          ]);
-      }
+        $expectedPositions = range(
+            0,
+            $items->count() - 1
+        );
 
-      foreach ($items as $item) {
-        NewsImage::whereKey($item['id'])
-          ->update([
-            'position' => $item['position'],
-          ]);
-      }
+        abort_unless(
+            $positions === $expectedPositions,
+            422,
+            'Las posiciones deben ser consecutivas desde 0.'
+        );
 
-      $news->updated_by = $request
-        ->user('api')
-        ->id;
+        DB::transaction(function () use (
+            $request,
+            $news,
+            $items,
+            $requestIds
+        ) {
+            $this->lockNewsForMediaMutation($news);
 
-      $news->save();
-    });
+            /*
+               * Comprobamos el conjunto real después
+               * de obtener el lock.
+               */
+            $currentIds = $news
+                ->images()
+                ->pluck('id')
+                ->sort()
+                ->values();
 
-    return NewsImageResource::collection(
-      $news->fresh()->images
-    );
-  }
+            abort_unless(
+                $currentIds->all() === $requestIds->all(),
+                422,
+                'Debe enviar todas las imágenes de la noticia.'
+            );
 
-  private function normalizePositions(
-    News $news
-  ): void {
-    $news->images()
-      ->orderBy('position')
-      ->get()
-      ->each(function (NewsImage $image, int $position) {
-        $image->update([
-          'position' => $position,
-        ]);
-      });
-  }
+            /*
+               * Posiciones temporales para evitar
+               * UNIQUE(news_id, position).
+               */
+            foreach ($items->values() as $index => $item) {
+                NewsImage::whereKey($item['id'])
+                    ->update([
+                        'position' => 1_000_000 + $index,
+                    ]);
+            }
 
-  private function lockNewsForMediaMutation(
-    News $news
-  ): void {
-    News::query()
-      ->whereKey($news->id)
-      ->lockForUpdate()
-      ->firstOrFail();
-  }
+            foreach ($items as $item) {
+                NewsImage::whereKey($item['id'])
+                    ->update([
+                        'position' => $item['position'],
+                    ]);
+            }
+
+            $news->updated_by = $request
+                ->user('api')
+                ->id;
+
+            $news->save();
+        });
+
+        return NewsImageResource::collection(
+            $news->fresh()->images
+        );
+    }
+
+    private function normalizePositions(
+        News $news
+    ): void {
+        $news->images()
+            ->orderBy('position')
+            ->get()
+            ->each(function (NewsImage $image, int $position) {
+                $image->update([
+                    'position' => $position,
+                ]);
+            });
+    }
+
+    private function lockNewsForMediaMutation(
+        News $news
+    ): void {
+        News::query()
+            ->whereKey($news->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+    }
 }

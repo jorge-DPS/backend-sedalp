@@ -9,10 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-
 class StaffMember extends Model
 {
-
     use HasFactory, SoftDeletes;
 
     protected $fillable = [

@@ -16,7 +16,7 @@ final readonly class ImageOptions
     public array $formats;
 
     /**
-     * @param list<ImageFormat> $formats
+     * @param  list<ImageFormat>  $formats
      */
     public function __construct(
         string $directory,

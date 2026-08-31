@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Http\Requests\Communication;
+namespace App\Http\Requests\AccessControl;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class IndexNewsTrashRequest extends FormRequest
+class IndexUserRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return $this->user('api')
-            ?->can('news.trash.view') ?? false;
+            ?->can('users.view') ?? false;
     }
 
     public function rules(): array
@@ -33,10 +33,10 @@ class IndexNewsTrashRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if ($this->has('search')) {
-            $search = trim(
-                (string) $this->input('search')
-            );
+        $search = $this->input('search');
+
+        if ($this->has('search') && is_string($search)) {
+            $search = trim($search);
 
             $this->merge([
                 'search' => $search !== ''

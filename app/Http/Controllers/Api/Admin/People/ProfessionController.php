@@ -3,31 +3,32 @@
 namespace App\Http\Controllers\Api\Admin\People;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\People\IndexProfessionRequest;
 use App\Http\Requests\People\StoreProfessionRequest;
 use App\Http\Requests\People\UpdateProfessionRequest;
 use App\Http\Resources\People\ProfessionResource;
 use App\Models\People\Profession;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
 class ProfessionController extends Controller
 {
-    public function index(Request $request): AnonymousResourceCollection
-    {
-        $perPage = min(
-            max($request->integer('per_page', 15), 1),
-            100
-        );
+    public function index(
+        IndexProfessionRequest $request
+    ): AnonymousResourceCollection {
+        $filters = $request->validated();
 
-        $search = trim(
-            (string) $request->query('search', '')
+        $search = $filters['search'] ?? null;
+
+        $perPage = (int) (
+            $filters['per_page']
+            ?? 15
         );
 
         $professions = Profession::query()
             ->when(
-                $search !== '',
+                filled($search),
                 fn ($query) => $query->where(
                     'name',
                     'ILIKE',
@@ -35,17 +36,22 @@ class ProfessionController extends Controller
                 )
             )
             ->when(
-                $request->has('active'),
+                array_key_exists(
+                    'active',
+                    $filters
+                ),
                 fn ($query) => $query->where(
                     'active',
-                    $request->boolean('active')
+                    $filters['active']
                 )
             )
             ->orderBy('name')
             ->paginate($perPage)
             ->withQueryString();
 
-        return ProfessionResource::collection($professions);
+        return ProfessionResource::collection(
+            $professions
+        );
     }
 
     public function store(
@@ -57,13 +63,17 @@ class ProfessionController extends Controller
 
         return (new ProfessionResource($profession))
             ->response()
-            ->setStatusCode(Response::HTTP_CREATED);
+            ->setStatusCode(
+                Response::HTTP_CREATED
+            );
     }
 
     public function show(
         Profession $profession
     ): ProfessionResource {
-        return new ProfessionResource($profession);
+        return new ProfessionResource(
+            $profession
+        );
     }
 
     public function update(
@@ -82,7 +92,11 @@ class ProfessionController extends Controller
     public function destroy(
         Profession $profession
     ): Response|JsonResponse {
-        if ($profession->staffMembers()->exists()) {
+        if (
+            $profession
+                ->staffMembers()
+                ->exists()
+        ) {
             return response()->json([
                 'message' => 'La profesión tiene personal asociado. Desactívela en lugar de eliminarla.',
             ], Response::HTTP_CONFLICT);

@@ -32,7 +32,7 @@ beforeEach(function () {
 
 function createNewsForVideoTest(User $creator): News
 {
-    $news = new News();
+    $news = new News;
 
     $news->fill([
         'title' => 'Noticia con videos',
@@ -362,4 +362,55 @@ it('elimina un video y normaliza las posiciones', function () {
         'id' => $third->id,
         'position' => 1,
     ]);
+});
+
+it('rechaza una URL que no pertenece a YouTube', function () {
+    $this
+        ->actingAs($this->user, 'api')
+        ->postJson(
+            "/api/admin/news/{$this->news->id}/videos",
+            [
+                'youtube_url' => 'https://example.com/video',
+                'title' => 'Video inválido',
+            ]
+        )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(
+            'youtube_url'
+        );
+});
+
+it('acepta una URL corta de YouTube', function () {
+    $this
+        ->actingAs($this->user, 'api')
+        ->postJson(
+            "/api/admin/news/{$this->news->id}/videos",
+            [
+                'youtube_url' => 'https://youtu.be/test123',
+                'title' => 'Video institucional',
+            ]
+        )
+        ->assertSuccessful();
+
+    $this->assertDatabaseHas('news_videos', [
+        'news_id' => $this->news->id,
+        'youtube_url' => 'https://youtu.be/test123',
+        'title' => 'Video institucional',
+    ]);
+});
+
+it('rechaza dominios que intentan simular YouTube', function () {
+    $this
+        ->actingAs($this->user, 'api')
+        ->postJson(
+            "/api/admin/news/{$this->news->id}/videos",
+            [
+                'youtube_url' => 'https://youtube.com.ejemplo.com/watch?v=test123',
+                'title' => 'Video inválido',
+            ]
+        )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(
+            'youtube_url'
+        );
 });

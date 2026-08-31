@@ -5,7 +5,6 @@ use App\Models\People\Position;
 use App\Models\People\Profession;
 use App\Models\People\StaffMember;
 use App\Models\User;
-
 use Illuminate\Support\Facades\Auth;
 
 function loginAndGetToken(

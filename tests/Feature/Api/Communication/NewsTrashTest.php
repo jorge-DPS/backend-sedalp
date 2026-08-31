@@ -1,8 +1,6 @@
 <?php
 
 use App\Models\Communication\News;
-use App\Models\Communication\NewsImage;
-use App\Models\Communication\NewsVideo;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Storage;
@@ -39,7 +37,7 @@ function createNewsForTrashTest(
     string $slug = 'noticia-eliminada',
     string $status = 'draft'
 ): News {
-    $news = new News();
+    $news = new News;
 
     $news->fill([
         'title' => $title,

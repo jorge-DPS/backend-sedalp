@@ -3,31 +3,32 @@
 namespace App\Http\Controllers\Api\Admin\People;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\People\IndexOrganizationalUnitRequest;
 use App\Http\Requests\People\StoreOrganizationalUnitRequest;
 use App\Http\Requests\People\UpdateOrganizationalUnitRequest;
 use App\Http\Resources\People\OrganizationalUnitResource;
 use App\Models\People\OrganizationalUnit;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
 class OrganizationalUnitController extends Controller
 {
-    public function index(Request $request): AnonymousResourceCollection
-    {
-        $perPage = min(
-            max($request->integer('per_page', 15), 1),
-            100
-        );
+    public function index(
+        IndexOrganizationalUnitRequest $request
+    ): AnonymousResourceCollection {
+        $filters = $request->validated();
 
-        $search = trim(
-            (string) $request->query('search', '')
+        $search = $filters['search'] ?? null;
+
+        $perPage = (int) (
+            $filters['per_page']
+            ?? 15
         );
 
         $units = OrganizationalUnit::query()
             ->when(
-                $search !== '',
+                filled($search),
                 fn ($query) => $query->where(
                     'name',
                     'ILIKE',
@@ -35,17 +36,22 @@ class OrganizationalUnitController extends Controller
                 )
             )
             ->when(
-                $request->has('active'),
+                array_key_exists(
+                    'active',
+                    $filters
+                ),
                 fn ($query) => $query->where(
                     'active',
-                    $request->boolean('active')
+                    $filters['active']
                 )
             )
             ->orderBy('name')
             ->paginate($perPage)
             ->withQueryString();
 
-        return OrganizationalUnitResource::collection($units);
+        return OrganizationalUnitResource::collection(
+            $units
+        );
     }
 
     public function store(
@@ -57,7 +63,9 @@ class OrganizationalUnitController extends Controller
 
         return (new OrganizationalUnitResource($unit))
             ->response()
-            ->setStatusCode(Response::HTTP_CREATED);
+            ->setStatusCode(
+                Response::HTTP_CREATED
+            );
     }
 
     public function show(
@@ -84,7 +92,11 @@ class OrganizationalUnitController extends Controller
     public function destroy(
         OrganizationalUnit $organizationalUnit
     ): Response|JsonResponse {
-        if ($organizationalUnit->staffMembers()->exists()) {
+        if (
+            $organizationalUnit
+                ->staffMembers()
+                ->exists()
+        ) {
             return response()->json([
                 'message' => 'La unidad organizacional tiene personal asociado. Desactívela en lugar de eliminarla.',
             ], Response::HTTP_CONFLICT);

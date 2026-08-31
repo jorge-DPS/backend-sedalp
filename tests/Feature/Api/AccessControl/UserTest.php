@@ -106,10 +106,7 @@ it('crea un usuario vinculado a personal activo', function () {
         'email' => 'nuevo.usuario@test.com',
     ]);
 
-    $user = User::where(
-        'email',
-        'nuevo.usuario@test.com'
-    )->firstOrFail();
+    $user = User::where('email', 'nuevo.usuario@test.com')->firstOrFail();
 
     expect($user->hasRole('tecnico'))
         ->toBeTrue();
@@ -367,4 +364,94 @@ it('permite que un superadmin modifique a otro superadmin', function () {
         'id' => $target->id,
         'email' => 'superadmin.nuevo@test.com',
     ]);
+});
+
+it('lista usuarios con permiso', function () {
+    User::factory()->create([
+        'email' => 'usuario.listado@test.com',
+    ]);
+
+    $this
+        ->actingAs($this->manager, 'api')
+        ->getJson('/api/admin/users')
+        ->assertOk()
+        ->assertJsonStructure([
+            'data' => [
+                '*' => [
+                    'id',
+                    'email',
+                    'staff_member',
+                    'roles',
+                    'permissions',
+                    'created_at',
+                    'updated_at',
+                ],
+            ],
+            'links',
+            'meta',
+        ]);
+});
+
+it('normaliza y aplica el filtro search al listar usuarios', function () {
+    $matchingUser = User::factory()->create([
+        'email' => 'usuario.buscar@test.com',
+    ]);
+
+    $otherUser = User::factory()->create([
+        'email' => 'otro.usuario@test.com',
+    ]);
+
+    $response = $this
+        ->actingAs($this->manager, 'api')
+        ->getJson(
+            '/api/admin/users?search=%20%20usuario.buscar%20%20'
+        )
+        ->assertOk();
+
+    $ids = collect(
+        $response->json('data')
+    )->pluck('id');
+
+    expect($ids)
+        ->toContain($matchingUser->id)
+        ->not->toContain($otherUser->id);
+});
+
+it('rechaza un search con tipo inválido al listar usuarios', function () {
+    $this
+        ->actingAs($this->manager, 'api')
+        ->getJson(
+            '/api/admin/users?search[]=usuario'
+        )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(
+            'search'
+        );
+});
+
+it('rechaza paginación inválida al listar usuarios', function () {
+    foreach (['abc', '0', '101'] as $perPage) {
+        $this
+            ->actingAs($this->manager, 'api')
+            ->getJson(
+                "/api/admin/users?per_page={$perPage}"
+            )
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(
+                'per_page'
+            );
+    }
+});
+
+it('acepta el límite máximo de paginación al listar usuarios', function () {
+    $this
+        ->actingAs($this->manager, 'api')
+        ->getJson(
+            '/api/admin/users?per_page=100'
+        )
+        ->assertOk()
+        ->assertJsonPath(
+            'meta.per_page',
+            100
+        );
 });
