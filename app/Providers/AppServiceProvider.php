@@ -41,6 +41,19 @@ class AppServiceProvider extends ServiceProvider
                 });
         });
 
+        RateLimiter::for('refresh', function (Request $request) {
+            return Limit::perMinute(30)
+                ->by($request->ip())
+                ->response(function (
+                    Request $request,
+                    array $headers
+                ) {
+                    return response()->json([
+                        'message' => 'Demasiadas solicitudes de renovación. Intente nuevamente en un momento.',
+                    ], 429, $headers);
+                });
+        });
+
         Gate::before(function (User $user, string $ability) {
             return $user->hasRole(RoleName::SUPER_ADMIN->value)
                 ? true

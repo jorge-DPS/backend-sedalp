@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\Admin\AccessControl\AccessCatalogController;
 use App\Http\Controllers\Api\Admin\AccessControl\UserController;
+use App\Http\Controllers\Api\Admin\AccessControl\UserStatusController;
+use App\Http\Controllers\Api\Admin\AccessControl\UserTrashController;
 use App\Http\Controllers\Api\Admin\Communication\NewsController;
 use App\Http\Controllers\Api\Admin\Communication\NewsImageController;
 use App\Http\Controllers\Api\Admin\Communication\NewsTrashController;
@@ -10,6 +12,7 @@ use App\Http\Controllers\Api\Admin\People\OrganizationalUnitController;
 use App\Http\Controllers\Api\Admin\People\PositionController;
 use App\Http\Controllers\Api\Admin\People\ProfessionController;
 use App\Http\Controllers\Api\Admin\People\StaffMemberController;
+use App\Http\Controllers\Api\Admin\People\StaffMemberStatusController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,7 +32,7 @@ Route::prefix('auth')->group(function () {
     Route::post(
         '/refresh',
         [AuthController::class, 'refresh']
-    );
+    )->middleware('throttle:refresh');
 
     Route::get(
         '/me',
@@ -287,6 +290,11 @@ Route::prefix('admin')
             [StaffMemberController::class, 'update']
         )->middleware('can:staff.update');
 
+        Route::patch(
+            '/staff-members/{staffMember}/status',
+            StaffMemberStatusController::class
+        )->middleware('can:staff.status.update');
+
         Route::delete(
             '/staff-members/{staffMember}',
             [StaffMemberController::class, 'destroy']
@@ -302,6 +310,11 @@ Route::prefix('admin')
             '/users',
             [UserController::class, 'index']
         )->middleware('can:users.view');
+
+        Route::get(
+            '/users/trash',
+            [UserTrashController::class, 'index']
+        )->middleware('can:users.trash.view');
 
         Route::post(
             '/users',
@@ -325,6 +338,18 @@ Route::prefix('admin')
             '/users/{user}/role',
             [UserController::class, 'updateRole']
         )->middleware('can:roles.assign');
+
+        Route::patch(
+            '/users/{user}/status',
+            UserStatusController::class
+        )->middleware('can:users.status.update');
+
+        Route::post(
+            '/users/{user}/restore',
+            [UserTrashController::class, 'restore']
+        )
+            ->whereNumber('user')
+            ->middleware('can:users.restore');
 
         Route::delete(
             '/users/{user}',

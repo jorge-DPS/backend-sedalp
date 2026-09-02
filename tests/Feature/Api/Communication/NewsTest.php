@@ -465,6 +465,156 @@ it('permite actualizar otros campos de una noticia publicada conservando su fech
         ->toBe('Título publicado actualizado');
 });
 
+it('impide cambiar la fecha de una noticia publicada sin news.publish', function () {
+    $news = createNewsForNewsTest(
+        $this->user,
+        'Noticia publicada protegida',
+        'noticia-publicada-protegida',
+        'published'
+    );
+
+    $this
+        ->actingAs($this->user, 'api')
+        ->patchJson(
+            "/api/admin/news/{$news->id}",
+            [
+                'published_at' => now()
+                    ->addDay()
+                    ->toDateString(),
+            ]
+        )
+        ->assertForbidden();
+});
+
+it('permite cambiar la fecha de publicación con news.publish', function () {
+    $this->newsRole->givePermissionTo('news.publish');
+
+    $news = createNewsForNewsTest(
+        $this->user,
+        'Noticia publicada con fecha editable',
+        'noticia-publicada-fecha-editable',
+        'published'
+    );
+
+    $newPublishedAt = now()
+        ->addDay()
+        ->toDateString();
+
+    $this
+        ->actingAs($this->user, 'api')
+        ->patchJson(
+            "/api/admin/news/{$news->id}",
+            [
+                'published_at' => $newPublishedAt,
+            ]
+        )
+        ->assertOk()
+        ->assertJsonPath('data.publishedAt', $newPublishedAt);
+});
+
+it('conserva el autor cuando su usuario fue eliminado lógicamente', function () {
+    $news = createNewsForNewsTest(
+        $this->user,
+        'Noticia con autor eliminado',
+        'noticia-con-autor-eliminado'
+    );
+
+    $viewer = User::factory()->create([
+        'email' => 'news.viewer@test.com',
+    ]);
+    $viewer->assignRole($this->newsRole);
+
+    $this->user->delete();
+
+    $this
+        ->actingAs($viewer, 'api')
+        ->getJson("/api/admin/news/{$news->id}")
+        ->assertOk()
+        ->assertJsonPath('data.createdBy.id', $this->user->id)
+        ->assertJsonPath(
+            'data.createdBy.email',
+            'editor.noticias@test.com'
+        );
+});
+
+it('permite al superadmin realizar el CRUD de noticias', function () {
+    $superAdmin = User::factory()->create([
+        'email' => 'superadmin.news@test.com',
+    ]);
+    $superAdmin->assignRole('super_admin');
+
+    $data = $this->validNewsData;
+    $data['title'] = 'Noticia del superadministrador';
+
+    $newsId = $this
+        ->actingAs($superAdmin, 'api')
+        ->postJson('/api/admin/news', $data)
+        ->assertCreated()
+        ->json('data.id');
+
+    $this
+        ->actingAs($superAdmin, 'api')
+        ->getJson('/api/admin/news')
+        ->assertOk();
+
+    $this
+        ->actingAs($superAdmin, 'api')
+        ->patchJson(
+            "/api/admin/news/{$newsId}",
+            ['title' => 'Noticia del superadministrador actualizada']
+        )
+        ->assertOk();
+
+    $this
+        ->actingAs($superAdmin, 'api')
+        ->deleteJson("/api/admin/news/{$newsId}")
+        ->assertOk();
+
+    $this->assertSoftDeleted('news', ['id' => $newsId]);
+});
+
+it('permite al comunicador realizar únicamente el CRUD de noticias', function () {
+    $communicator = User::factory()->create([
+        'email' => 'comunicador.crud@test.com',
+    ]);
+    $communicator->assignRole('comunicador');
+
+    $data = $this->validNewsData;
+    $data['title'] = 'Noticia del comunicador';
+    $data['status'] = 'published';
+    $data['published_at'] = now()->toDateString();
+
+    $newsId = $this
+        ->actingAs($communicator, 'api')
+        ->postJson('/api/admin/news', $data)
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'published')
+        ->json('data.id');
+
+    $this
+        ->actingAs($communicator, 'api')
+        ->getJson("/api/admin/news/{$newsId}")
+        ->assertOk();
+
+    $this
+        ->actingAs($communicator, 'api')
+        ->patchJson(
+            "/api/admin/news/{$newsId}",
+            ['title' => 'Noticia del comunicador actualizada']
+        )
+        ->assertOk();
+
+    $this
+        ->actingAs($communicator, 'api')
+        ->deleteJson("/api/admin/news/{$newsId}")
+        ->assertOk();
+
+    $this
+        ->actingAs($communicator, 'api')
+        ->getJson('/api/admin/users')
+        ->assertForbidden();
+});
+
 it('elimina una noticia mediante soft delete', function () {
     $news = createNewsForNewsTest(
         $this->user

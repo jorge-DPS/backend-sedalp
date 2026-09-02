@@ -4,6 +4,9 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
+use App\Enums\Auth\AccessStatus;
+use App\Enums\Auth\UserStatus;
+use App\Models\Audit\AccessStateChange;
 use App\Models\Communication\News;
 use App\Models\People\StaffMember;
 use Database\Factories\UserFactory;
@@ -32,9 +35,14 @@ class User extends Authenticatable implements JWTSubject
      */
     protected $fillable = [
         'staff_member_id',
-
         'email',
         'password',
+        'account_status',
+    ];
+
+    protected $attributes = [
+        'account_status' => UserStatus::ACTIVE->value,
+        'token_version' => 1,
     ];
 
     protected $hidden = [
@@ -47,6 +55,8 @@ class User extends Authenticatable implements JWTSubject
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'account_status' => UserStatus::class,
+            'token_version' => 'integer',
         ];
     }
 
@@ -63,32 +73,37 @@ class User extends Authenticatable implements JWTSubject
 
     public function canAccessApi(): bool
     {
-        /*
-         * Las cuentas técnicas pueden existir
-         * sin personal asociado.
-         */
+        return $this->effectiveAccessStatus()
+            === AccessStatus::ACTIVE;
+    }
+
+    public function effectiveAccessStatus(): AccessStatus
+    {
+        if ($this->trashed()) {
+            return AccessStatus::DELETED;
+        }
+
+        if ($this->account_status === UserStatus::SUSPENDED) {
+            return AccessStatus::SUSPENDED;
+        }
+
         if ($this->staff_member_id === null) {
-            return true;
+            return AccessStatus::ACTIVE;
         }
 
-        /*
-         * Incluimos registros eliminados lógicamente
-         * para poder bloquear también ese caso.
-         */
-        $staffMember = $this
-            ->staffMember()
-            ->withTrashed()
-            ->first();
+        $staffMember = $this->relationLoaded('staffMember')
+            ? $this->getRelation('staffMember')
+            : $this->staffMember()->withTrashed()->first();
 
-        if ($staffMember === null) {
-            return false;
+        if (
+            $staffMember === null
+            || $staffMember->trashed()
+            || ! $staffMember->active
+        ) {
+            return AccessStatus::DISABLED_BY_STAFF;
         }
 
-        if ($staffMember->trashed()) {
-            return false;
-        }
-
-        return $staffMember->active === true;
+        return AccessStatus::ACTIVE;
     }
 
     public function getJWTIdentifier(): mixed
@@ -98,7 +113,17 @@ class User extends Authenticatable implements JWTSubject
 
     public function getJWTCustomClaims(): array
     {
-        return [];
+        return [
+            'ver' => $this->token_version,
+        ];
+    }
+
+    public function accessStateChanges(): HasMany
+    {
+        return $this->hasMany(
+            AccessStateChange::class,
+            'target_user_id'
+        );
     }
 
     public function createdNews(): HasMany

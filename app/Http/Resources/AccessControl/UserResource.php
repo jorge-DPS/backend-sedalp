@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\AccessControl;
 
+use App\Enums\Auth\RoleName;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,6 +13,11 @@ class UserResource extends JsonResource
         return [
             'id' => $this->id,
             'email' => $this->email,
+            'account_status' => $this->account_status->value,
+            'effective_status' => $this
+                ->effectiveAccessStatus()
+                ->value,
+            'can_access' => $this->canAccessApi(),
 
             'staff_member' => $this->whenLoaded(
                 'staffMember',
@@ -28,6 +34,8 @@ class UserResource extends JsonResource
                         'paternal_surname' => $this->staffMember->paternal_surname,
 
                         'maternal_surname' => $this->staffMember->maternal_surname,
+
+                        'active' => $this->staffMember->active,
 
                         'organizational_unit' => $this->staffMember->organizationalUnit
                           ? [
@@ -83,8 +91,13 @@ class UserResource extends JsonResource
                     ->values()
             ),
 
+            'is_super_admin' => $this->hasRole(
+                RoleName::SUPER_ADMIN->value
+            ),
+
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
+            'deleted_at' => $this->deleted_at,
         ];
     }
 }

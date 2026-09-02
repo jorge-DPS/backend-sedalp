@@ -160,7 +160,11 @@ class StaffMemberController extends Controller
     public function destroy(
         StaffMember $staffMember
     ): Response|JsonResponse {
-        if ($staffMember->user()->exists()) {
+        if (
+            $staffMember->user()
+                ->withTrashed()
+                ->exists()
+        ) {
             return response()->json([
                 'message' => 'El personal tiene una cuenta de usuario asociada. Desactive o elimine primero la cuenta.',
             ], Response::HTTP_CONFLICT);

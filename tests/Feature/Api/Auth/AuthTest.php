@@ -6,6 +6,8 @@ use App\Models\People\Profession;
 use App\Models\People\StaffMember;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 function loginAndGetToken(
     string $email = 'usuario@test.com',
@@ -120,6 +122,12 @@ it('permite iniciar sesión con credenciales correctas', function () {
     expect($response->json('expires_in'))
         ->toBeInt()
         ->toBeGreaterThan(0);
+
+    expect($response->headers->get('Cache-Control'))
+        ->toContain('no-store');
+
+    expect($response->headers->get('Pragma'))
+        ->toBe('no-cache');
 });
 
 it('permite login a una cuenta técnica sin personal asociado', function () {
@@ -235,7 +243,32 @@ it('rechaza me sin token', function () {
 });
 
 it('devuelve el usuario autenticado en me', function () {
-    $token = loginAndGetToken();
+    $staffMember = createStaffForAuthTest(
+        active: true,
+        suffix: '31'
+    );
+
+    $permission = Permission::create([
+        'name' => 'users.view',
+        'guard_name' => 'api',
+    ]);
+
+    $role = Role::create([
+        'name' => 'director',
+        'guard_name' => 'api',
+    ]);
+
+    $role->givePermissionTo($permission);
+
+    $user = User::factory()->create([
+        'staff_member_id' => $staffMember->id,
+        'email' => 'usuario@test.com',
+        'password' => 'Password123!',
+    ]);
+
+    $user->assignRole($role);
+
+    $token = auth('api')->login($user);
 
     $response = $this
         ->withToken($token)
@@ -244,25 +277,79 @@ it('devuelve el usuario autenticado en me', function () {
     $response
         ->assertOk()
         ->assertJsonPath(
-            'user.email',
+            'data.email',
             'usuario@test.com'
         )
+        ->assertJsonPath(
+            'data.staff_member.first_names',
+            'Usuario Auth'
+        )
+        ->assertJsonPath(
+            'data.roles.0',
+            'director'
+        )
+        ->assertJsonPath(
+            'data.permissions.0',
+            'users.view'
+        )
+        ->assertJsonPath(
+            'data.is_super_admin',
+            false
+        )
         ->assertJsonStructure([
-            'user' => [
+            'data' => [
                 'id',
                 'email',
-            ],
-            'authorization' => [
+                'staff_member' => [
+                    'id',
+                    'first_names',
+                    'paternal_surname',
+                    'maternal_surname',
+                    'organizational_unit',
+                    'position',
+                    'profession',
+                ],
                 'roles',
                 'permissions',
+                'is_super_admin',
+                'created_at',
+                'updated_at',
             ],
-        ]);
+        ])
+        ->assertJsonMissingPath('data.password')
+        ->assertJsonMissingPath('data.remember_token');
+});
 
-    expect($response->json('authorization.roles'))
-        ->toBeArray();
+it('identifica al superadministrador en me sin duplicar permisos del bypass global', function () {
+    $role = Role::create([
+        'name' => 'super_admin',
+        'guard_name' => 'api',
+    ]);
 
-    expect($response->json('authorization.permissions'))
-        ->toBeArray();
+    $user = User::factory()->create([
+        'email' => 'superadmin@test.com',
+    ]);
+
+    $user->assignRole($role);
+
+    $token = auth('api')->login($user);
+
+    $this
+        ->withToken($token)
+        ->getJson('/api/auth/me')
+        ->assertOk()
+        ->assertJsonPath(
+            'data.is_super_admin',
+            true
+        )
+        ->assertJsonPath(
+            'data.roles.0',
+            'super_admin'
+        )
+        ->assertJsonCount(
+            0,
+            'data.permissions'
+        );
 });
 
 it('permite cerrar sesión', function () {
@@ -312,6 +399,21 @@ it('permite renovar el token', function () {
     expect($response->json('access_token'))
         ->toBeString()
         ->not->toBeEmpty();
+
+    expect($response->headers->get('Cache-Control'))
+        ->toContain('no-store');
+
+    expect($response->headers->get('Pragma'))
+        ->toBe('no-cache');
+});
+
+it('rechaza renovar sin token', function () {
+    $this
+        ->postJson('/api/auth/refresh')
+        ->assertUnauthorized()
+        ->assertJson([
+            'message' => 'El token no puede ser renovado.',
+        ]);
 });
 
 it('permite refrescar un token expirado dentro del refresh ttl', function () {
@@ -464,6 +566,81 @@ it('rechaza refrescar un token fuera del refresh ttl', function () {
         ->assertUnauthorized()
         ->assertJson([
             'message' => 'El token no puede ser renovado.',
+        ]);
+});
+
+it('rechaza renovar cuando el personal asociado fue desactivado', function () {
+    $staffMember = createStaffForAuthTest(
+        active: true,
+        suffix: '41'
+    );
+
+    $user = User::factory()->create([
+        'staff_member_id' => $staffMember->id,
+    ]);
+
+    $token = auth('api')->login($user);
+
+    auth('api')->unsetToken();
+    Auth::forgetGuards();
+
+    $staffMember->update([
+        'active' => false,
+    ]);
+
+    $this
+        ->withToken($token)
+        ->postJson('/api/auth/refresh')
+        ->assertForbidden()
+        ->assertJson([
+            'message' => 'Cuenta inhabilitada.',
+        ]);
+
+    auth('api')->unsetToken();
+    Auth::forgetGuards();
+
+    $this
+        ->withToken($token)
+        ->getJson('/api/auth/me')
+        ->assertUnauthorized();
+});
+
+it('rechaza renovar cuando el usuario fue eliminado', function () {
+    $user = User::factory()->create();
+    $token = auth('api')->login($user);
+
+    auth('api')->unsetToken();
+    Auth::forgetGuards();
+
+    $user->delete();
+
+    $this
+        ->withToken($token)
+        ->postJson('/api/auth/refresh')
+        ->assertUnauthorized()
+        ->assertJson([
+            'message' => 'La cuenta asociada al token ya no está disponible.',
+        ]);
+});
+
+it('limita las solicitudes excesivas de renovación por ip', function () {
+    $server = [
+        'REMOTE_ADDR' => '198.51.100.42',
+    ];
+
+    foreach (range(1, 30) as $attempt) {
+        $this
+            ->withServerVariables($server)
+            ->postJson('/api/auth/refresh')
+            ->assertUnauthorized();
+    }
+
+    $this
+        ->withServerVariables($server)
+        ->postJson('/api/auth/refresh')
+        ->assertTooManyRequests()
+        ->assertJson([
+            'message' => 'Demasiadas solicitudes de renovación. Intente nuevamente en un momento.',
         ]);
 });
 

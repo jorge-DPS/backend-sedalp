@@ -63,6 +63,14 @@ class StaffMemberResource extends JsonResource
                     ? [
                         'id' => $this->user->id,
                         'email' => $this->user->email,
+                        'account_status' => $this->user
+                            ->account_status
+                            ->value,
+                        'effective_status' => $this->user
+                            ->effectiveAccessStatus()
+                            ->value,
+                        'can_access' => $this->user
+                            ->canAccessApi(),
                     ]
                     : null
             ),

@@ -8,6 +8,7 @@ enum PermissionName: string
     case STAFF_VIEW = 'staff.view';
     case STAFF_CREATE = 'staff.create';
     case STAFF_UPDATE = 'staff.update';
+    case STAFF_STATUS_UPDATE = 'staff.status.update';
     case STAFF_DELETE = 'staff.delete';
 
     // Cargos
@@ -26,7 +27,10 @@ enum PermissionName: string
     case USERS_VIEW = 'users.view';
     case USERS_CREATE = 'users.create';
     case USERS_UPDATE = 'users.update';
+    case USERS_STATUS_UPDATE = 'users.status.update';
     case USERS_DELETE = 'users.delete';
+    case USERS_TRASH_VIEW = 'users.trash.view';
+    case USERS_RESTORE = 'users.restore';
 
     // Roles
     case ROLES_VIEW = 'roles.view';

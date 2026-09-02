@@ -5,6 +5,7 @@ namespace App\Services\Media;
 use App\DTOs\Media\ImageOptions;
 use App\Enums\Media\ImageFormat;
 use App\Enums\Media\ImageResizeMode;
+use App\Jobs\Media\CleanupImageFiles;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -89,6 +90,15 @@ class ImageService
                 );
             } catch (Throwable $cleanupException) {
                 report($cleanupException);
+
+                try {
+                    CleanupImageFiles::dispatch(
+                        filename: $filename,
+                        directory: $options->directory,
+                    );
+                } catch (Throwable $dispatchException) {
+                    report($dispatchException);
+                }
             }
 
             throw $exception;
@@ -107,6 +117,12 @@ class ImageService
         $directory = $this->normalizeDirectory(
             $directory
         );
+
+        if (! Str::isUuid($filename)) {
+            throw new RuntimeException(
+                'Nombre de archivo de imagen no válido.'
+            );
+        }
 
         $paths = array_map(
             fn (ImageFormat $format) => $this->path(

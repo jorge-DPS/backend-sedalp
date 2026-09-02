@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin\AccessControl;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AccessControl\DeleteUserRequest;
 use App\Http\Requests\AccessControl\IndexUserRequest;
 use App\Http\Requests\AccessControl\StoreUserRequest;
 use App\Http\Requests\AccessControl\UpdateUserRequest;
@@ -11,19 +12,11 @@ use App\Http\Resources\AccessControl\UserResource;
 use App\Models\User;
 use App\Services\AccessControl\UserService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
 class UserController extends Controller
 {
-    private const RELATIONS = [
-        'staffMember.organizationalUnit',
-        'staffMember.position',
-        'staffMember.profession',
-        'roles.permissions',
-    ];
-
     public function __construct(
         private readonly UserService $userService
     ) {}
@@ -31,26 +24,11 @@ class UserController extends Controller
     public function index(
         IndexUserRequest $request
     ): AnonymousResourceCollection {
-        $filters = $request->validated();
-
-        $search = $filters['search'] ?? null;
-        $perPage = (int) ($filters['per_page'] ?? 15);
-
-        $users = User::query()
-            ->with(self::RELATIONS)
-            ->when(
-                filled($search),
-                fn ($query) => $query->where(
-                    'email',
-                    'ILIKE',
-                    "%{$search}%"
-                )
+        return UserResource::collection(
+            $this->userService->paginate(
+                $request->validated()
             )
-            ->latest('id')
-            ->paginate($perPage)
-            ->withQueryString();
-
-        return UserResource::collection($users);
+        );
     }
 
     public function store(
@@ -108,40 +86,14 @@ class UserController extends Controller
     }
 
     public function destroy(
-        Request $request,
+        DeleteUserRequest $request,
         User $user
-    ): Response|JsonResponse {
-        $authenticatedUser = $request->user(
-            'api'
+    ): Response {
+        $this->userService->delete(
+            actor: $request->user('api'),
+            user: $user,
+            reason: $request->validated('reason'),
         );
-
-        /*
-         * Ningún usuario puede eliminar
-         * su propia cuenta.
-         */
-        if ($authenticatedUser->is($user)) {
-            return response()->json([
-                'message' => 'No puede eliminar su propia cuenta.',
-            ], Response::HTTP_UNPROCESSABLE_ENTITY);
-        }
-
-        /*
-         * Un usuario normal no puede eliminar
-         * una cuenta super_admin.
-         *
-         * Un super_admin sí puede eliminar
-         * otro super_admin.
-         */
-        if (
-            $user->hasRole('super_admin')
-            && ! $authenticatedUser->hasRole('super_admin')
-        ) {
-            return response()->json([
-                'message' => 'No está autorizado para eliminar un superadministrador.',
-            ], Response::HTTP_FORBIDDEN);
-        }
-
-        $user->delete();
 
         return response()->noContent();
     }

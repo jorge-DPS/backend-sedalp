@@ -60,6 +60,9 @@ class NewsResource extends JsonResource
 
             'updatedAt' => $this->updated_at
                 ?->toISOString(),
+
+            'deletedAt' => $this->deleted_at
+                ?->toISOString(),
         ];
     }
 }

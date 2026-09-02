@@ -1,10 +1,17 @@
 <?php
 
+use App\DTOs\Media\ImageOptions;
+use App\Enums\Media\ImageFormat;
+use App\Enums\Media\ImageResizeMode;
+use App\Jobs\Media\CleanupImageFiles;
 use App\Services\Media\ImageService;
 use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\EncodedImage;
+use Intervention\Image\Interfaces\ImageInterface;
 use Intervention\Image\Interfaces\ImageManagerInterface;
-use Mockery\MockInterface;
 
 it('detecta cuando falla la eliminación física de una imagen', function () {
     $disk = Mockery::mock(
@@ -83,4 +90,102 @@ it('elimina correctamente todas las variantes de una imagen', function () {
     );
 
     expect(true)->toBeTrue();
+});
+
+it('rechaza nombres de archivo que no sean uuid', function () {
+    Storage::shouldReceive('disk')->never();
+
+    $service = new ImageService(
+        Mockery::mock(ImageManagerInterface::class)
+    );
+
+    expect(
+        fn () => $service->delete(
+            filename: '../../archivo',
+            directory: 'communication/news',
+        )
+    )->toThrow(
+        RuntimeException::class,
+        'Nombre de archivo de imagen no válido.'
+    );
+});
+
+it('encola la limpieza cuando falla una escritura parcial', function () {
+    Queue::fake();
+
+    $file = UploadedFile::fake()->image(
+        'parcial.jpg',
+        100,
+        100
+    );
+
+    $image = Mockery::mock(
+        ImageInterface::class
+    );
+
+    $image
+        ->shouldReceive('encodeUsingFormat')
+        ->twice()
+        ->andReturn(
+            new EncodedImage('contenido')
+        );
+
+    $imageManager = Mockery::mock(
+        ImageManagerInterface::class
+    );
+
+    $imageManager
+        ->shouldReceive('decode')
+        ->once()
+        ->with($file)
+        ->andReturn($image);
+
+    $disk = Mockery::mock(
+        FilesystemAdapter::class
+    );
+
+    $disk
+        ->shouldReceive('put')
+        ->twice()
+        ->andReturn(true, false);
+
+    $disk
+        ->shouldReceive('delete')
+        ->once()
+        ->andReturn(false);
+
+    Storage::shouldReceive('disk')
+        ->times(3)
+        ->with(
+            config('media.disk', 'public')
+        )
+        ->andReturn($disk);
+
+    $service = new ImageService(
+        $imageManager
+    );
+
+    $options = new ImageOptions(
+        directory: 'communication/news',
+        formats: [
+            ImageFormat::WEBP,
+            ImageFormat::PNG,
+        ],
+        resizeMode: ImageResizeMode::NONE,
+    );
+
+    expect(
+        fn () => $service->store(
+            file: $file,
+            options: $options,
+        )
+    )->toThrow(
+        RuntimeException::class,
+        'No se pudo almacenar'
+    );
+
+    Queue::assertPushed(
+        CleanupImageFiles::class,
+        fn (CleanupImageFiles $job): bool => $job->directory === 'communication/news'
+    );
 });

@@ -2,6 +2,7 @@
 
 namespace App\Services\Communication;
 
+use App\Jobs\Media\CleanupImageFiles;
 use App\Models\Communication\News;
 use App\Models\Communication\NewsImage;
 use App\Services\Media\ImageService;
@@ -81,6 +82,11 @@ class NewsTrashService
                         'user_id' => $userId,
                         'exception' => $exception->getMessage(),
                     ]
+                );
+
+                CleanupImageFiles::dispatch(
+                    filename: $filename,
+                    directory: NewsImage::MEDIA_DIRECTORY,
                 );
             }
         }

@@ -1,6 +1,6 @@
 <?php
 
-use App\Jobs\Media\CleanupNewsImageFiles;
+use App\Jobs\Media\CleanupImageFiles;
 use App\Models\Communication\News;
 use App\Models\Communication\NewsImage;
 use App\Models\User;
@@ -418,14 +418,83 @@ it('encola la limpieza cuando falla la eliminación física de una imagen', func
     );
 
     Queue::assertPushed(
-        CleanupNewsImageFiles::class,
+        CleanupImageFiles::class,
         function (
-            CleanupNewsImageFiles $job
+            CleanupImageFiles $job
         ): bool {
             return $job->filename
                 === 'cccccccc-cccc-cccc-cccc-cccccccccccc'
                 && $job->directory
                 === NewsImage::MEDIA_DIRECTORY;
         }
+    );
+});
+
+it('encola la limpieza cuando falla después de almacenar y la transacción revierte', function () {
+    Queue::fake();
+
+    $filename = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
+    createImageForMediaTest(
+        $this->news,
+        $filename,
+        0
+    );
+
+    $imageService = Mockery::mock(
+        ImageService::class
+    );
+
+    $imageService
+        ->shouldReceive('store')
+        ->once()
+        ->andReturn($filename);
+
+    $imageService
+        ->shouldReceive('delete')
+        ->once()
+        ->with(
+            $filename,
+            NewsImage::MEDIA_DIRECTORY,
+        )
+        ->andThrow(
+            new RuntimeException(
+                'Storage no disponible.'
+            )
+        );
+
+    $this->app->instance(
+        ImageService::class,
+        $imageService
+    );
+
+    $image = UploadedFile::fake()->image(
+        'duplicada.jpg',
+        800,
+        600
+    );
+
+    $this
+        ->actingAs($this->user, 'api')
+        ->post(
+            "/api/admin/news/{$this->news->id}/images",
+            [
+                'images' => [
+                    [
+                        'file' => $image,
+                        'alt' => 'Imagen duplicada',
+                    ],
+                ],
+            ],
+            [
+                'Accept' => 'application/json',
+            ]
+        )
+        ->assertServerError();
+
+    Queue::assertPushed(
+        CleanupImageFiles::class,
+        fn (CleanupImageFiles $job): bool => $job->filename === $filename
+            && $job->directory === NewsImage::MEDIA_DIRECTORY
     );
 });

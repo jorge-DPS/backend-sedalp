@@ -10,11 +10,12 @@ use App\Http\Requests\Communication\ReorderNewsMediaRequest;
 use App\Http\Requests\Communication\StoreNewsImagesRequest;
 use App\Http\Requests\Communication\UpdateNewsImageRequest;
 use App\Http\Resources\Communication\NewsImageResource;
-use App\Jobs\Media\CleanupNewsImageFiles;
+use App\Jobs\Media\CleanupImageFiles;
 use App\Models\Communication\News;
 use App\Models\Communication\NewsImage;
 use App\Services\Media\ImageService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -28,7 +29,7 @@ class NewsImageController extends Controller
     public function store(
         StoreNewsImagesRequest $request,
         News $news
-    ) {
+    ): AnonymousResourceCollection {
         $validated = $request->validated();
 
         $createdImages = [];
@@ -60,34 +61,40 @@ class NewsImageController extends Controller
         );
 
         try {
+            $storedImages = collect($validated['images'])
+                ->map(function (array $imageData) use (
+                    $options,
+                    &$createdImages
+                ): array {
+                    $filename = $this->imageService->store(
+                        file: $imageData['file'],
+                        options: $options,
+                    );
 
-            DB::transaction(function () use ($request, $news, $validated, $options, &$createdImages) {
+                    $createdImages[] = $filename;
 
+                    return [
+                        'filename' => $filename,
+                        'alt' => $imageData['alt'],
+                        'caption' => $imageData['caption'] ?? null,
+                    ];
+                });
+
+            DB::transaction(function () use (
+                $request,
+                $news,
+                $storedImages
+            ): void {
                 $this->lockNewsForMediaMutation($news);
+
                 $position = (
                     $news->images()
                         ->max('position') ?? -1
                 ) + 1;
 
-                foreach ($validated['images'] as $imageData) {
-
-                    $filename = $this
-                        ->imageService
-                        ->store(
-                            file: $imageData['file'],
-                            options: $options,
-                        );
-
-                    $createdImages[] = $filename;
-
+                foreach ($storedImages as $storedImage) {
                     $news->images()->create([
-                        'filename' => $filename,
-
-                        'alt' => $imageData['alt'],
-
-                        'caption' => $imageData['caption']
-                          ?? null,
-
+                        ...$storedImage,
                         'position' => $position++,
                     ]);
                 }
@@ -122,6 +129,11 @@ class NewsImageController extends Controller
                             'exception' => $cleanupException->getMessage(),
                         ]
                     );
+
+                    CleanupImageFiles::dispatch(
+                        filename: $filename,
+                        directory: NewsImage::MEDIA_DIRECTORY,
+                    );
                 }
             }
 
@@ -138,15 +150,21 @@ class NewsImageController extends Controller
         News $news,
         NewsImage $image
     ): NewsImageResource {
-        $image->update(
-            $request->validated()
-        );
+        DB::transaction(function () use (
+            $request,
+            $news,
+            $image
+        ): void {
+            $image->update(
+                $request->validated()
+            );
 
-        $news->updated_by = $request
-            ->user('api')
-            ->id;
+            $news->updated_by = $request
+                ->user('api')
+                ->id;
 
-        $news->save();
+            $news->save();
+        });
 
         return new NewsImageResource($image);
     }
@@ -210,7 +228,7 @@ class NewsImageController extends Controller
                 ]
             );
 
-            CleanupNewsImageFiles::dispatch(
+            CleanupImageFiles::dispatch(
                 filename: $filename,
                 directory: NewsImage::MEDIA_DIRECTORY,
             );
@@ -226,7 +244,7 @@ class NewsImageController extends Controller
     public function reorder(
         ReorderNewsMediaRequest $request,
         News $news
-    ) {
+    ): AnonymousResourceCollection {
         $items = collect(
             $request->validated('items')
         );

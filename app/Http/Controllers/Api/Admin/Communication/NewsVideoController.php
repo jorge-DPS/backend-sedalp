@@ -10,6 +10,7 @@ use App\Http\Resources\Communication\NewsVideoResource;
 use App\Models\Communication\News;
 use App\Models\Communication\NewsVideo;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 
 class NewsVideoController extends Controller
@@ -100,7 +101,7 @@ class NewsVideoController extends Controller
     public function reorder(
         ReorderNewsMediaRequest $request,
         News $news
-    ) {
+    ): AnonymousResourceCollection {
         $items = collect(
             $request->validated('items')
         );

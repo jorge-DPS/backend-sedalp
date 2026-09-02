@@ -171,8 +171,7 @@ return [
     */
 
     'persistent_claims' => [
-        // 'foo',
-        // 'bar',
+        'ver',
     ],
 
     /*

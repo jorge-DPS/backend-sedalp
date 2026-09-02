@@ -89,33 +89,32 @@ class UpdateStaffMemberRequest extends FormRequest
             ],
 
             'position_id' => [
-            'sometimes',
-            'required',
-            'integer',
-            Rule::exists('positions', 'id')
+                'sometimes',
+                'required',
+                'integer',
+                Rule::exists('positions', 'id')
                     ->where(
                         fn ($query) => $query
                             ->where('active', true)
                             ->whereNull('deleted_at')
                     ),
-        ],
+            ],
 
             'profession_id' => [
-            'sometimes',
-            'required',
-            'integer',
-            Rule::exists('professions', 'id')
+                'sometimes',
+                'required',
+                'integer',
+                Rule::exists('professions', 'id')
                     ->where(
                         fn ($query) => $query
                             ->where('active', true)
                             ->whereNull('deleted_at')
                     ),
-        ],
+            ],
 
             'active' => [
-            'sometimes',
-            'boolean',
-        ],
+                'prohibited',
+            ],
         ];
     }
 

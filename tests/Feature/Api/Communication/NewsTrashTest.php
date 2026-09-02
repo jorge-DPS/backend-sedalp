@@ -1,9 +1,14 @@
 <?php
 
+use App\Jobs\Media\CleanupImageFiles;
 use App\Models\Communication\News;
+use App\Models\Communication\NewsImage;
 use App\Models\User;
+use App\Services\Media\ImageService;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
@@ -93,6 +98,10 @@ it('permite consultar la papelera con news.trash.view', function () {
         ->assertJsonPath(
             'data.0.id',
             $news->id
+        )
+        ->assertJsonPath(
+            'data.0.deletedAt',
+            $news->deleted_at?->toISOString()
         );
 });
 
@@ -312,6 +321,64 @@ it('el force delete elimina imágenes y videos mediante cascade', function () {
     $this->assertDatabaseMissing('news_videos', [
         'id' => $video->id,
     ]);
+});
+
+it('encola archivos pendientes cuando falla su limpieza durante force delete', function () {
+    Queue::fake();
+
+    $news = createNewsForTrashTest(
+        $this->admin
+    );
+
+    $filename = 'abababab-abab-abab-abab-abababababab';
+
+    $news->images()->create([
+        'filename' => $filename,
+        'alt' => 'Imagen con limpieza pendiente',
+        'caption' => null,
+        'position' => 0,
+    ]);
+
+    $news->delete();
+
+    $imageService = Mockery::mock(
+        ImageService::class
+    );
+
+    $imageService
+        ->shouldReceive('delete')
+        ->once()
+        ->with(
+            $filename,
+            NewsImage::MEDIA_DIRECTORY,
+        )
+        ->andThrow(
+            new RuntimeException(
+                'Storage no disponible.'
+            )
+        );
+
+    $this->app->instance(
+        ImageService::class,
+        $imageService
+    );
+
+    $this
+        ->actingAs($this->admin, 'api')
+        ->deleteJson(
+            "/api/admin/news/{$news->id}/force"
+        )
+        ->assertOk()
+        ->assertJsonPath(
+            'media_cleanup_pending',
+            true
+        );
+
+    Queue::assertPushed(
+        CleanupImageFiles::class,
+        fn (CleanupImageFiles $job): bool => $job->filename === $filename
+            && $job->directory === NewsImage::MEDIA_DIRECTORY
+    );
 });
 
 it('rechaza force delete sin news.force_delete', function () {

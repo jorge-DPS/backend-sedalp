@@ -3,16 +3,21 @@
 namespace App\Jobs\Media;
 
 use App\Services\Media\ImageService;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class CleanupNewsImageFiles implements ShouldQueue
+class CleanupImageFiles implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
     public int $tries = 5;
+
+    public int $timeout = 30;
+
+    public int $uniqueFor = 3600;
 
     public function __construct(
         public readonly string $filename,
@@ -30,6 +35,16 @@ class CleanupNewsImageFiles implements ShouldQueue
             900,
             1800,
         ];
+    }
+
+    public function uniqueId(): string
+    {
+        return sprintf(
+            '%s:%s/%s',
+            config('media.disk', 'public'),
+            $this->directory,
+            $this->filename,
+        );
     }
 
     public function handle(

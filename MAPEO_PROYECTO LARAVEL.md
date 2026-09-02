@@ -1,4 +1,228 @@
-# Mapeo técnico del backend SEDALP
+# Mapeo técnico del backend SIMRED / SEDALP
+
+> **Versión vigente: 1 de septiembre de 2026.**
+>
+> Estado auditado: árbol de trabajo actual, incluidos cambios todavía no confirmados en Git. No se inspeccionaron internamente vendor ni node_modules y no se reproducen secretos.
+
+## Resumen vigente
+
+SIMRED dispone de un backend API-first en Laravel 13 y PostgreSQL. El alcance terminado comprende JWT, roles/permisos, CRUD integral de usuarios vinculados a personal, catálogos organizacionales y CRUD de noticias con publicación, imágenes, videos y papelera.
+
+| Elemento | Estado vigente |
+|---|---:|
+| Modelos / controladores propios | 9 / 15 |
+| Form Requests / API Resources | 30 / 8 |
+| Servicios / DTOs / Enums / Jobs | 5 / 1 / 8 / 1 |
+| Migraciones | 16: 14 aplicadas y 2 pendientes |
+| Tablas PostgreSQL locales | 21 |
+| Endpoints API | 54: 49 administrativos, 4 de autenticación y 1 de estado |
+| Permisos / roles | 57 / 5 |
+| Archivos de prueba | 19 |
+| Pruebas / aserciones | 226 / 942, todas aprobadas |
+
+**Estado funcional:** el CRUD solicitado de usuarios y noticias está implementado y probado.
+
+**Estado operativo:** antes de usar esta versión sobre desarrollo o producción deben aplicarse las dos migraciones pendientes. La gestión de .env permanece bajo decisión del propietario.
+
+## Stack y arquitectura vigentes
+
+| Componente | Versión/configuración |
+|---|---|
+| PHP / Laravel | 8.5.9 / 13.23.0 |
+| PostgreSQL | 18.4, conexión pgsql |
+| JWT Auth / Spatie Permission | 2.9.2 / 8.3.0 |
+| Pruebas | Pest 5 / PHPUnit 13 |
+
+Sanctum no forma parte del proyecto y la base local ya no contiene personal_access_tokens.
+
+Las rutas se separan en estado público, autenticación JWT y administración protegida por auth:api, account.active y can:*. Las operaciones multitabla viven en servicios transaccionales; Form Requests concentran autorización/validación y Resources definen la salida para Vue.
+
+## Dominio vigente
+
+- User: credenciales, rol, estado, versión de token, soft delete y vínculo con personal.
+- StaffMember: nombres, apellidos, CI, contacto, unidad, cargo, profesión y estado laboral.
+- OrganizationalUnit, Position y Profession: catálogos organizacionales.
+- News: TipTap, slug, publicación, autoría y soft delete.
+- NewsImage y NewsVideo: multimedia ordenada.
+- AccessStateChange: historial de cambios de acceso.
+
+RoleName contiene super_admin, director, responsable, tecnico y comunicador. Los otros enums controlan 57 permisos, estados de cuenta/acceso, acciones auditables, estados editoriales y formatos de imagen.
+
+Los autores y editores de noticias se cargan incluyendo usuarios eliminados lógicamente, conservando la autoría.
+
+## Migraciones vigentes
+
+Hay 16 migraciones: 14 aplicadas y dos pendientes.
+
+1. 2026_08_31_040308_add_access_state_to_users_table agrega account_status y token_version con defaults, índice y CHECK.
+2. 2026_08_31_040309_create_access_state_changes_table crea actor, usuario/personal objetivo, acción, motivo, metadatos, fecha e índices.
+
+El código ya utiliza esas columnas y tabla. Aplicarlas es obligatorio antes de usar esta versión con la base local o productiva.
+
+Ya están aplicados el CHECK de fecha para noticias publicadas, el UNIQUE funcional de CI/complemento, índices GIN trigram de noticias, índices de FK de personal y restricciones de posiciones multimedia.
+
+La base local contiene 21 tablas. Después de crear auditoría tendrá 22 contando migrations.
+
+## Autenticación vigente
+
+| Aspecto | Implementación |
+|---|---|
+| Guard / driver | api / jwt |
+| Claims | sub y claim persistente ver |
+| Access TTL / refresh TTL | 60 / 20.160 minutos por defecto |
+| Login / refresh throttle | 5 por correo+IP / 30 por IP |
+
+El acceso efectivo combina soft delete, account_status y StaffMember.active. Refresh admite access tokens expirados dentro de refresh_ttl y después valida usuario, estado y token_version.
+
+Cambiar contraseña, estado de cuenta, estado laboral, eliminar o restaurar incrementa token_version y revoca JWT anteriores.
+
+## Roles y permisos vigentes
+
+| Función | super_admin | comunicador |
+|---|---:|---:|
+| CRUD de usuarios | sí | no |
+| Estado/restauración de usuarios | sí | no |
+| CRUD de personal y catálogos | sí | no |
+| CRUD y publicación de noticias | sí | sí |
+| Imágenes y videos | sí | sí |
+| Papelera/force delete de noticias | sí | no |
+
+El comunicador recibe solo news.view, news.create, news.update, news.delete y news.publish.
+
+No se permite autoeliminación, autosuspensión, baja laboral propia ni autodegradación de superadministrador. Un usuario normal no puede gestionar superadministradores. Solo super_admin restaura usuarios y no existe force delete de usuarios.
+
+## API vigente
+
+Las 49 rutas administrativas comparten auth:api, account.active y scopeBindings().
+
+### Usuarios — 9 rutas
+
+- GET/POST /api/admin/users;
+- GET /api/admin/users/trash;
+- GET/PATCH/DELETE /api/admin/users/{user};
+- PUT /api/admin/users/{user}/role;
+- PATCH /api/admin/users/{user}/status;
+- POST /api/admin/users/{user}/restore.
+
+La creación recibe staff_member_id de personal activo existente o un objeto staff_member. En el segundo caso crea personal, cuenta y rol en una sola transacción. La edición acepta personal parcial, pero prohíbe staff_member.active, que tiene endpoint dedicado.
+
+El listado busca por correo, nombres, apellidos, CI, cargo y profesión; filtra por rol, cuenta, estado laboral, unidad, cargo y profesión.
+
+### Personal — 6 rutas
+
+CRUD en /api/admin/staff-members y PATCH /api/admin/staff-members/{staffMember}/status. Desactivar personal revoca JWT; personal vinculado a usuarios activos o eliminados lógicamente no puede eliminarse.
+
+### Noticias — 17 rutas
+
+CRUD, papelera, restauración, force delete, imágenes, videos y reordenamiento. Publicar, retirar publicación o cambiar su fecha exige news.publish. El título no regenera slug y la papelera expone deletedAt.
+
+### Catálogos y acceso — 17 rutas
+
+Cinco rutas por unidad, cargo y profesión, además de dos catálogos de solo lectura para roles/permisos.
+
+## Servicios, multimedia y colas vigentes
+
+| Servicio | Responsabilidad |
+|---|---|
+| UserService | filtros, alta integral, edición, rol, estado, baja, restauración y auditoría |
+| StaffMemberStatusService | estado laboral, protección y revocación |
+| NewsService | alta, edición, publicación, baja, slug y locks |
+| NewsTrashService | restauración, force delete y limpieza |
+| ImageService | UUID, resize, formatos, almacenamiento y eliminación |
+
+Se usan advisory locks para slug, lockForUpdate en operaciones sensibles, locks para posiciones y UNIQUE como defensa final.
+
+ImageService comprueba los booleanos de Storage. CleanupImageFiles es único, tiene cinco intentos, backoff progresivo, timeout de 30 segundos y se encola ante escrituras parciales, rollback o eliminación fallida.
+
+## Seeders vigentes
+
+1. RolesAndPermissionsSeeder: 57 permisos, cinco roles y matrices.
+2. SuperAdminSeeder: valida configuración, restaura cuenta, actualiza contraseña y asigna rol transaccionalmente.
+3. NewsPermissionsSeeder: compatibilidad para sembrar al comunicador aisladamente.
+
+.env.example documenta PostgreSQL, superadministrador, JWT y MEDIA_DISK sin secretos reales.
+
+## Pruebas vigentes
+
+| Área | Pruebas |
+|---|---:|
+| Estado y ejemplos | 3 |
+| Autenticación / autorización | 30 |
+| Usuarios y ciclo de acceso | 34 |
+| Personal, estado y catálogos | 83 |
+| SuperAdminSeeder | 6 |
+| Noticias y multimedia | 64 |
+| ImageService y cleanup job | 6 |
+| **Total** | **226** |
+
+Ejecución 1/09/2026: **226 passed, 942 assertions**. Laravel Pint aprobó y git diff --check no reportó errores.
+
+## Hallazgos vigentes
+
+### Corregidos
+
+- protección integral de superadministradores;
+- revocación por cuenta o personal inactivo;
+- refresh dentro de refresh_ttl y throttle dedicado;
+- fecha de publicación protegida en Request/PostgreSQL;
+- locks de slug/posiciones e índices de rendimiento;
+- detección de fallos de Storage y cleanup job con reintentos;
+- defaults de estado, comunicador integrado y .env.example completo;
+- tabla residual de Sanctum eliminada y cobertura HTTP de catálogos/seguridad.
+
+### Pendientes operativos — alta prioridad
+
+1. Aplicar las dos migraciones pendientes; el código ya depende de ellas.
+2. .env y .env.testing continúan versionados. Retiro y rotación quedan bajo decisión del propietario.
+
+### Fuera del alcance actual
+
+- API pública de noticias y endpoint de consulta de auditoría;
+- hero banners, misión, visión, objetivos e imágenes institucionales;
+- módulos geográficos/asistencias que hoy solo tienen permisos.
+
+### Mejoras no bloqueantes
+
+- congelar snake_case o camelCase para Vue;
+- agregar factories de People/noticias/multimedia;
+- monitorear workers y jobs fallidos.
+
+## Contrato funcional vigente
+
+1. Laravel es la fuente de verdad y Vue debe alinearse con él.
+2. super_admin administra usuarios y noticias.
+3. comunicador administra solo noticias y multimedia.
+4. La baja de usuarios es lógica; no hay eliminación física por API.
+5. Cuenta y estado laboral son independientes y ambos determinan acceso.
+6. Operaciones sensibles exigen motivo y revocan tokens anteriores.
+
+## Próximos pasos operativos
+
+1. Respaldar la base.
+2. Revisar y autorizar las dos migraciones pendientes.
+3. Ejecutar php artisan migrate cuando el propietario lo decida.
+4. Configurar o rotar secretos sin versionarlos.
+5. Mantener worker activo si la cola no usa sync.
+6. Alinear Vue 3 con este contrato.
+
+## Evidencia final vigente
+
+- 54 endpoints API;
+- 16 migraciones: 14 aplicadas y 2 pendientes;
+- 21 tablas locales;
+- 57 permisos y cinco roles;
+- 19 archivos, 226 pruebas y 942 aserciones;
+- .env no fue modificado y no se reprodujeron secretos;
+- vendor y node_modules quedaron fuera del análisis interno.
+
+---
+
+<details>
+<summary><strong>Anexo histórico: auditoría del 30 de agosto de 2026, anterior a las correcciones</strong></summary>
+
+> Las cifras y hallazgos siguientes describen un estado anterior y se conservan solo como trazabilidad.
+
+## Auditoría histórica
 
 > Actualizado: 30 de agosto de 2026.
 >
@@ -633,3 +857,5 @@ Exposición de secretos, escalamiento mediante superadmin, acceso de personal in
 ### Limitaciones
 
 Laravel Boost no estuvo disponible como MCP; se usaron Artisan, configuración, código y base local en lectura. No hubo carga, simulación concurrente ni inspección de infraestructura productiva externa.
+
+</details>

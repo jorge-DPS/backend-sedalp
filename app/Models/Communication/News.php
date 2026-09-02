@@ -43,7 +43,7 @@ class News extends Model
         return $this->belongsTo(
             User::class,
             'created_by'
-        );
+        )->withTrashed();
     }
 
     public function updater(): BelongsTo
@@ -51,7 +51,7 @@ class News extends Model
         return $this->belongsTo(
             User::class,
             'updated_by'
-        );
+        )->withTrashed();
     }
 
     public function images(): HasMany
