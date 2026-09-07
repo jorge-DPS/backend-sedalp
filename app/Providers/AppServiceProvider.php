@@ -13,51 +13,64 @@ use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
-    public function register(): void
-    {
-        //
-    }
+  /**
+   * Register any application services.
+   */
+  public function register(): void
+  {
+    //
+  }
 
-    /**
-     * Bootstrap any application services.
-     */
-    public function boot(): void
-    {
-        RateLimiter::for('login', function (Request $request) {
-            $email = Str::lower((string) $request->input('email'));
+  /**
+   * Bootstrap any application services.
+   */
+  public function boot(): void
+  {
+    RateLimiter::for('login', function (Request $request) {
+      $email = Str::lower((string) $request->input('email'));
 
-            return Limit::perMinute(5)
-                ->by($email.'|'.$request->ip())
-                ->response(function (
-                    Request $request,
-                    array $headers
-                ) {
-                    return response()->json([
-                        'message' => 'Demasiados intentos de inicio de sesión. Intente nuevamente en un momento.',
-                    ], 429, $headers);
-                });
+      return Limit::perMinute(5)
+        ->by($email . '|' . $request->ip())
+        ->response(function (
+          Request $request,
+          array $headers
+        ) {
+          return response()->json([
+            'message' => 'Demasiados intentos de inicio de sesión. Intente nuevamente en un momento.',
+          ], 429, $headers);
         });
+    });
 
-        RateLimiter::for('refresh', function (Request $request) {
-            return Limit::perMinute(30)
-                ->by($request->ip())
-                ->response(function (
-                    Request $request,
-                    array $headers
-                ) {
-                    return response()->json([
-                        'message' => 'Demasiadas solicitudes de renovación. Intente nuevamente en un momento.',
-                    ], 429, $headers);
-                });
+    RateLimiter::for('refresh', function (Request $request) {
+      return Limit::perMinute(30)
+        ->by($request->ip())
+        ->response(function (
+          Request $request,
+          array $headers
+        ) {
+          return response()->json([
+            'message' => 'Demasiadas solicitudes de renovación. Intente nuevamente en un momento.',
+          ], 429, $headers);
         });
+    });
 
-        Gate::before(function (User $user, string $ability) {
-            return $user->hasRole(RoleName::SUPER_ADMIN->value)
-                ? true
-                : null;
+    RateLimiter::for('public-api', function (Request $request) {
+      return Limit::perMinute(120)
+        ->by($request->ip())
+        ->response(function (
+          Request $request,
+          array $headers
+        ) {
+          return response()->json([
+            'message' => 'Demasiadas solicitudes. Intente nuevamente en un momento.',
+          ], 429, $headers);
         });
-    }
+    });
+
+    Gate::before(function (User $user, string $ability) {
+      return $user->hasRole(RoleName::SUPER_ADMIN->value)
+        ? true
+        : null;
+    });
+  }
 }

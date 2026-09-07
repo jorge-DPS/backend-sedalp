@@ -356,3 +356,5 @@ Route::prefix('admin')
             [UserController::class, 'destroy']
         )->middleware('can:users.delete');
     });
+
+    require __DIR__.'/api/public/news.php';

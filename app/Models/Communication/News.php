@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class News extends Model
 {
@@ -65,6 +66,20 @@ class News extends Model
         return $this->hasMany(NewsVideo::class)
             ->orderBy('position');
     }
+
+    public function coverImage(): HasOne
+{
+    return $this->hasOne(NewsImage::class)
+        ->ofMany('position', 'min');
+}
+
+public function scopePubliclyVisible(Builder $query): Builder
+{
+    return $query
+        ->where('status', NewsStatus::PUBLISHED->value)
+        ->whereNotNull('published_at')
+        ->where('published_at', '<=', today()->toDateString());
+}
 
     public function scopeSearch(
         Builder $query,
