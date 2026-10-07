@@ -39,7 +39,7 @@ beforeEach(function () {
 function createNewsForTrashTest(
     User $creator,
     string $title = 'Noticia eliminada',
-    string $slug = 'noticia-eliminada',
+    string $slug = '200000000011',
     string $status = 'draft'
 ): News {
     $news = new News;
@@ -48,7 +48,6 @@ function createNewsForTrashTest(
         'title' => $title,
         'subtitle' => null,
         'excerpt' => 'Resumen de prueba.',
-        'description' => 'Descripción de prueba.',
         'content' => [
             'type' => 'doc',
             'content' => [],
@@ -109,13 +108,13 @@ it('la papelera solo muestra noticias eliminadas', function () {
     createNewsForTrashTest(
         $this->admin,
         'Noticia activa',
-        'noticia-activa'
+        '200000000012'
     );
 
     $deleted = createNewsForTrashTest(
         $this->admin,
         'Noticia en papelera',
-        'noticia-en-papelera'
+        '200000000013'
     );
 
     $deleted->delete();
@@ -137,7 +136,7 @@ it('la papelera solo muestra noticias eliminadas', function () {
         ->not->toContain(
             News::where(
                 'slug',
-                'noticia-activa'
+                '200000000012'
             )->value('id')
         );
 });
@@ -188,7 +187,7 @@ it('conserva el estado published al restaurar una noticia', function () {
     $news = createNewsForTrashTest(
         $this->admin,
         'Noticia publicada',
-        'noticia-publicada',
+        '200000000004',
         'published'
     );
 

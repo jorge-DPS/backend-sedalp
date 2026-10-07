@@ -11,6 +11,6 @@ Route::prefix('public/news')
             ->name('public.news.index');
 
         Route::get('/{slug}', 'show')
-            ->where('slug', '[A-Za-z0-9-]+')
+            ->where('slug', '[1-9][0-9]{11}')
             ->name('public.news.show');
     });

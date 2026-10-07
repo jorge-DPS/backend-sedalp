@@ -14,7 +14,6 @@ class NewsDetailResource extends JsonResource
             'title' => $this->title,
             'subtitle' => $this->subtitle,
             'excerpt' => $this->excerpt,
-            'description' => $this->description,
             'content' => $this->content,
             'publishedAt' => $this->published_at
                 ?->toDateString(),

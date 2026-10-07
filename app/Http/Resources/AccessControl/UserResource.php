@@ -3,8 +3,10 @@
 namespace App\Http\Resources\AccessControl;
 
 use App\Enums\Auth\RoleName;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 class UserResource extends JsonResource
 {
@@ -13,6 +15,11 @@ class UserResource extends JsonResource
         return [
             'id' => $this->id,
             'email' => $this->email,
+            'avatar_url' => $this->avatar_filename === null
+                ? null
+                : Storage::disk(config('media.disk', 'public'))->url(
+                    User::AVATAR_DIRECTORY.'/'.$this->avatar_filename.'.webp'
+                ),
             'account_status' => $this->account_status->value,
             'effective_status' => $this
                 ->effectiveAccessStatus()
@@ -34,6 +41,12 @@ class UserResource extends JsonResource
                         'paternal_surname' => $this->staffMember->paternal_surname,
 
                         'maternal_surname' => $this->staffMember->maternal_surname,
+
+                        'birth_date' => $this->staffMember->birth_date?->toDateString(),
+                        'ci' => $this->staffMember->ci,
+                        'ci_complement' => $this->staffMember->ci_complement,
+                        'phone' => $this->staffMember->phone,
+                        'email' => $this->staffMember->email,
 
                         'active' => $this->staffMember->active,
 

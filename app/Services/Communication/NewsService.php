@@ -7,7 +7,6 @@ use App\Models\Communication\News;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class NewsService
 {
@@ -34,21 +33,9 @@ class NewsService
             $attributes,
             $status
         ): News {
-            $baseSlug = $this->generateBaseSlug($attributes['title']);
-
-            DB::selectOne(
-                <<<'SQL'
-                    SELECT pg_advisory_xact_lock(
-                        hashtext('news_slug'),
-                        hashtext(?)
-                    )
-                    SQL,
-                [$baseSlug]
-            );
-
             $news = new News;
             $news->fill($attributes);
-            $news->slug = $this->generateUniqueSlug($baseSlug);
+            $news->slug = $this->generateUniqueSlug();
             $news->status = $status;
             $news->created_by = $actor->id;
             $news->save();
@@ -149,24 +136,30 @@ class NewsService
         );
     }
 
-    private function generateBaseSlug(string $title): string
+    protected function generateSlugCandidate(): string
     {
-        return Str::slug($title) ?: 'noticia';
+        return (string) random_int(100_000_000_000, 999_999_999_999);
     }
 
-    private function generateUniqueSlug(string $baseSlug): string
+    private function generateUniqueSlug(): string
     {
-        $slug = $baseSlug;
-        $counter = 2;
+        do {
+            $slug = $this->generateSlugCandidate();
 
-        while (
+            DB::selectOne(
+                <<<'SQL'
+                    SELECT pg_advisory_xact_lock(
+                        hashtext('news_slug'),
+                        hashtext(?)
+                    )
+                    SQL,
+                [$slug]
+            );
+        } while (
             News::withTrashed()
                 ->where('slug', $slug)
                 ->exists()
-        ) {
-            $slug = "{$baseSlug}-{$counter}";
-            $counter++;
-        }
+        );
 
         return $slug;
     }

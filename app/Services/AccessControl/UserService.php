@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class UserService
 {
@@ -21,6 +22,10 @@ class UserService
         'staffMember.profession',
         'roles.permissions',
     ];
+
+    public function __construct(
+        private readonly UserAvatarService $avatarService
+    ) {}
 
     /**
      * @param  array<string, mixed>  $filters
@@ -125,27 +130,42 @@ class UserService
 
     public function create(array $data): User
     {
-        return DB::transaction(function () use ($data) {
-            $staffMemberId = $data['staff_member_id'] ?? null;
+        $avatarFilename = null;
 
-            if (isset($data['staff_member'])) {
-                $staffMemberId = StaffMember::create(
-                    $data['staff_member']
-                )->id;
-            }
+        try {
+            return DB::transaction(function () use ($data, &$avatarFilename): User {
+                $staffMemberId = $data['staff_member_id'] ?? null;
 
-            $user = User::create([
-                'staff_member_id' => $staffMemberId,
-                'email' => $data['email'],
-                'password' => $data['password'],
-            ]);
+                if (isset($data['staff_member'])) {
+                    $staffMemberId = StaffMember::create(
+                        $data['staff_member']
+                    )->id;
+                }
 
-            $user->syncRoles([
-                $data['role'],
-            ]);
+                $user = new User([
+                    'staff_member_id' => $staffMemberId,
+                    'email' => $data['email'],
+                    'password' => $data['password'],
+                ]);
 
-            return $user->load(self::RELATIONS);
-        });
+                if (isset($data['avatar'])) {
+                    $avatarFilename = $this->avatarService->store($data['avatar']);
+                    $user->avatar_filename = $avatarFilename;
+                }
+
+                $user->save();
+
+                $user->syncRoles([
+                    $data['role'],
+                ]);
+
+                return $user->load(self::RELATIONS);
+            });
+        } catch (Throwable $exception) {
+            $this->avatarService->delete($avatarFilename);
+
+            throw $exception;
+        }
     }
 
     public function update(
@@ -153,55 +173,74 @@ class UserService
         User $user,
         array $data
     ): User {
-        return DB::transaction(function () use (
-            $actor,
-            $user,
-            $data
-        ): User {
-            $lockedUser = User::query()
-                ->whereKey($user->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+        $avatarFilename = null;
 
-            $this->ensureCanModifyUser(
-                actor: $actor,
-                target: $lockedUser,
-            );
+        try {
+            return DB::transaction(function () use (
+                $actor,
+                $user,
+                $data,
+                &$avatarFilename
+            ): User {
+                $lockedUser = User::query()
+                    ->whereKey($user->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-            $staffData = $data['staff_member'] ?? null;
-
-            unset($data['staff_member']);
-
-            if ($staffData !== null) {
-                $this->updateStaffMember(
-                    user: $lockedUser,
-                    data: $staffData,
-                );
-            }
-
-            $passwordChanged = array_key_exists(
-                'password',
-                $data
-            );
-
-            $lockedUser->update($data);
-
-            if ($passwordChanged) {
-                $lockedUser->increment('token_version');
-
-                $this->recordChange(
+                $this->ensureCanModifyUser(
                     actor: $actor,
                     target: $lockedUser,
-                    action: AccessStateAction::USER_CREDENTIALS_UPDATED,
-                    reason: 'Actualización de contraseña de la cuenta.',
-                    metadata: [
-                        'fields' => ['password'],
-                    ],
                 );
-            }
 
-            return $lockedUser->load(self::RELATIONS);
-        });
+                if (array_key_exists('avatar', $data)) {
+                    $previousAvatar = $lockedUser->avatar_filename;
+                    $avatarFilename = $data['avatar'] === null
+                        ? null
+                        : $this->avatarService->store($data['avatar']);
+                    $lockedUser->avatar_filename = $avatarFilename;
+
+                    DB::afterCommit(fn () => $this->avatarService->delete($previousAvatar));
+                }
+
+                $staffData = $data['staff_member'] ?? null;
+
+                unset($data['staff_member'], $data['avatar']);
+
+                if ($staffData !== null) {
+                    $this->updateStaffMember(
+                        user: $lockedUser,
+                        data: $staffData,
+                    );
+                }
+
+                $passwordChanged = array_key_exists(
+                    'password',
+                    $data
+                );
+
+                $lockedUser->update($data);
+
+                if ($passwordChanged) {
+                    $lockedUser->increment('token_version');
+
+                    $this->recordChange(
+                        actor: $actor,
+                        target: $lockedUser,
+                        action: AccessStateAction::USER_CREDENTIALS_UPDATED,
+                        reason: 'Actualización de contraseña de la cuenta.',
+                        metadata: [
+                            'fields' => ['password'],
+                        ],
+                    );
+                }
+
+                return $lockedUser->load(self::RELATIONS);
+            });
+        } catch (Throwable $exception) {
+            $this->avatarService->delete($avatarFilename);
+
+            throw $exception;
+        }
     }
 
     /**

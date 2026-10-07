@@ -20,8 +20,6 @@ class NewsResource extends JsonResource
 
             'excerpt' => $this->excerpt,
 
-            'description' => $this->description,
-
             'content' => $this->content,
 
             'publishedAt' => $this->published_at

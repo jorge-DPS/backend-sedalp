@@ -21,6 +21,8 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements JWTSubject
 {
+    public const AVATAR_DIRECTORY = 'access-control/avatars';
+
     /** @use HasFactory<UserFactory> */
     // use HasApiTokens;
     use HasFactory;

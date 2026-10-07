@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -13,13 +14,33 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->foreignId('staff_member_id')
+                ->nullable()
+                ->unique()
+                ->constrained('staff_members')
+                ->restrictOnDelete();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->string('avatar_filename', 36)->nullable();
+            $table->string('account_status', 20)->default('active')->index();
+            $table->unsignedInteger('token_version')->default(1);
             $table->rememberToken();
             $table->timestamps();
+            $table->softDeletes();
         });
+
+        DB::statement(<<<'SQL'
+            ALTER TABLE users
+            ADD CONSTRAINT users_account_status_check
+            CHECK (account_status IN ('active', 'suspended'))
+            SQL);
+
+        DB::statement(<<<'SQL'
+            ALTER TABLE users
+            ADD CONSTRAINT users_token_version_check
+            CHECK (token_version >= 1)
+            SQL);
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();

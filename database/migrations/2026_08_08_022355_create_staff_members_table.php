@@ -105,6 +105,9 @@ return new class extends Migration
                 'paternal_surname',
                 'maternal_surname',
             ]);
+            $table->index('organizational_unit_id', 'staff_members_organizational_unit_id_idx');
+            $table->index('position_id', 'staff_members_position_id_idx');
+            $table->index('profession_id', 'staff_members_profession_id_idx');
         });
 
         /*

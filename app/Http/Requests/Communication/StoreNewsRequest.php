@@ -34,11 +34,6 @@ class StoreNewsRequest extends FormRequest
                 'string',
             ],
 
-            'description' => [
-                'required',
-                'string',
-            ],
-
             'content' => [
                 'required',
                 'array',

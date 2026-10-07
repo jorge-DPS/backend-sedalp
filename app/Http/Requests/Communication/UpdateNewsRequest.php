@@ -39,12 +39,6 @@ class UpdateNewsRequest extends FormRequest
                 'string',
             ],
 
-            'description' => [
-                'sometimes',
-                'required',
-                'string',
-            ],
-
             'content' => [
                 'sometimes',
                 'required',

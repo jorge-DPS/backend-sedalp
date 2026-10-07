@@ -2,6 +2,7 @@
 
 use App\Models\Communication\News;
 use App\Models\User;
+use App\Services\Communication\NewsService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Spatie\Permission\Models\Role;
 
@@ -33,7 +34,6 @@ beforeEach(function () {
         'title' => 'Nueva obra para La Paz',
         'subtitle' => 'Subtítulo de prueba',
         'excerpt' => 'Resumen de la noticia de prueba.',
-        'description' => 'Descripción de la noticia de prueba.',
         'content' => [
             'type' => 'doc',
             'content' => [],
@@ -46,7 +46,7 @@ beforeEach(function () {
 function createNewsForNewsTest(
     User $creator,
     string $title = 'Noticia existente',
-    string $slug = 'noticia-existente',
+    string $slug = '200000000001',
     string $status = 'draft'
 ): News {
     $news = new News;
@@ -55,7 +55,6 @@ function createNewsForNewsTest(
         'title' => $title,
         'subtitle' => null,
         'excerpt' => 'Resumen de prueba.',
-        'description' => 'Descripción de prueba.',
         'content' => [
             'type' => 'doc',
             'content' => [],
@@ -92,7 +91,7 @@ it('permite listar noticias con news.view', function () {
     createNewsForNewsTest(
         $this->user,
         'Noticia para listado',
-        'noticia-para-listado'
+        '200000000002'
     );
 
     $response = $this
@@ -116,18 +115,21 @@ it('crea una noticia como borrador', function () {
             $this->validNewsData
         );
 
-    $response->assertCreated();
+    $response->assertCreated()
+        ->assertJsonPath('data.excerpt', $this->validNewsData['excerpt'])
+        ->assertJsonPath('data.content.type', 'doc')
+        ->assertJsonMissingPath('data.description');
 
     $this->assertDatabaseHas('news', [
         'title' => 'Nueva obra para La Paz',
-        'slug' => 'nueva-obra-para-la-paz',
+        'slug' => $response->json('data.slug'),
         'status' => 'draft',
         'created_by' => $this->user->id,
     ]);
 });
 
-it('genera automáticamente el slug de la noticia', function () {
-    $this
+it('genera automáticamente un código numérico de doce dígitos', function () {
+    $response = $this
         ->actingAs($this->user, 'api')
         ->postJson(
             '/api/admin/news',
@@ -135,18 +137,28 @@ it('genera automáticamente el slug de la noticia', function () {
         )
         ->assertCreated();
 
+    expect($response->json('data.slug'))->toBeString()->toMatch('/^[1-9][0-9]{11}$/');
+
     $this->assertDatabaseHas('news', [
         'title' => 'Nueva obra para La Paz',
-        'slug' => 'nueva-obra-para-la-paz',
+        'slug' => $response->json('data.slug'),
     ]);
 });
 
-it('genera un slug diferente cuando ya existe', function () {
-    createNewsForNewsTest(
+it('reintenta si el código ya existe incluso en la papelera', function (bool $trashed) {
+    $existingNews = createNewsForNewsTest(
         $this->user,
         'Nueva obra para La Paz',
-        'nueva-obra-para-la-paz'
+        '100000000001'
     );
+
+    if ($trashed) {
+        $existingNews->delete();
+    }
+
+    $service = Mockery::mock(NewsService::class)->makePartial()->shouldAllowMockingProtectedMethods();
+    $service->shouldReceive('generateSlugCandidate')->twice()->andReturn('100000000001', '100000000002');
+    $this->app->instance(NewsService::class, $service);
 
     $this
         ->actingAs($this->user, 'api')
@@ -154,12 +166,37 @@ it('genera un slug diferente cuando ya existe', function () {
             '/api/admin/news',
             $this->validNewsData
         )
-        ->assertCreated();
+        ->assertCreated()
+        ->assertJsonPath('data.slug', '100000000002');
 
     $this->assertDatabaseHas('news', [
         'title' => 'Nueva obra para La Paz',
-        'slug' => 'nueva-obra-para-la-paz-2',
+        'slug' => '100000000002',
     ]);
+})->with([false, true]);
+
+it('genera códigos distintos para noticias con el mismo título', function () {
+    $this->actingAs($this->user, 'api');
+    $first = $this->postJson('/api/admin/news', $this->validNewsData)->assertCreated()->json('data.slug');
+    $second = $this->postJson('/api/admin/news', $this->validNewsData)->assertCreated()->json('data.slug');
+
+    expect($first)->not->toBe($second);
+});
+
+it('el cliente no puede elegir ni modificar el código de la noticia', function () {
+    $this->actingAs($this->user, 'api');
+    $response = $this->postJson('/api/admin/news', [
+        ...$this->validNewsData,
+        'slug' => 'codigo-elegido',
+    ])->assertCreated();
+
+    $slug = $response->json('data.slug');
+    expect($slug)->toMatch('/^[1-9][0-9]{11}$/');
+
+    $this->patchJson('/api/admin/news/'.$response->json('data.id'), [
+        'title' => 'Título editado',
+        'slug' => '999999999999',
+    ])->assertOk()->assertJsonPath('data.slug', $slug);
 });
 
 it('rechaza crear una noticia sin título', function () {
@@ -287,7 +324,7 @@ it('no modifica el slug cuando cambia el título', function () {
     $news = createNewsForNewsTest(
         $this->user,
         'Título original',
-        'titulo-original'
+        '200000000003'
     );
 
     $this
@@ -303,7 +340,7 @@ it('no modifica el slug cuando cambia el título', function () {
     $this->assertDatabaseHas('news', [
         'id' => $news->id,
         'title' => 'Título completamente nuevo',
-        'slug' => 'titulo-original',
+        'slug' => '200000000003',
     ]);
 });
 
@@ -395,7 +432,7 @@ it('impide quitar la fecha a una noticia que ya está publicada', function () {
     $news = createNewsForNewsTest(
         $this->user,
         'Noticia publicada',
-        'noticia-publicada',
+        '200000000004',
         'published'
     );
 
@@ -434,7 +471,7 @@ it('permite actualizar otros campos de una noticia publicada conservando su fech
     $news = createNewsForNewsTest(
         $this->user,
         'Título publicado',
-        'titulo-publicado',
+        '200000000005',
         'published'
     );
 
@@ -469,7 +506,7 @@ it('impide cambiar la fecha de una noticia publicada sin news.publish', function
     $news = createNewsForNewsTest(
         $this->user,
         'Noticia publicada protegida',
-        'noticia-publicada-protegida',
+        '200000000006',
         'published'
     );
 
@@ -492,7 +529,7 @@ it('permite cambiar la fecha de publicación con news.publish', function () {
     $news = createNewsForNewsTest(
         $this->user,
         'Noticia publicada con fecha editable',
-        'noticia-publicada-fecha-editable',
+        '200000000007',
         'published'
     );
 
@@ -516,7 +553,7 @@ it('conserva el autor cuando su usuario fue eliminado lógicamente', function ()
     $news = createNewsForNewsTest(
         $this->user,
         'Noticia con autor eliminado',
-        'noticia-con-autor-eliminado'
+        '200000000008'
     );
 
     $viewer = User::factory()->create([

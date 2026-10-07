@@ -177,6 +177,62 @@ it('permite al superadmin crear personal y usuario en una sola operación', func
     ]);
 });
 
+it('permite el mismo CI con complementos distintos y devuelve ambos documentos', function () {
+    $this->actingAs($this->manager, 'api');
+
+    foreach ([null, '1a', '2b'] as $index => $complement) {
+        $payload = integratedUserPayload($this, '90000050', "documento{$index}@test.com");
+        $payload['staff_member']['ci_complement'] = $complement;
+
+        $this->postJson('/api/admin/users', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.staff_member.ci', '90000050')
+            ->assertJsonPath('data.staff_member.ci_complement', $complement === null ? null : strtoupper($complement));
+    }
+
+    $this->assertDatabaseCount('staff_members', 3);
+});
+
+it('rechaza duplicar CI y complemento desde el registro de usuarios', function (?string $complement) {
+    $payload = integratedUserPayload($this);
+    $payload['staff_member']['ci_complement'] = $complement;
+
+    $this->actingAs($this->manager, 'api')
+        ->postJson('/api/admin/users', $payload)
+        ->assertCreated();
+
+    $payload['email'] = 'duplicado@test.com';
+    $this->postJson('/api/admin/users', $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('staff_member.ci');
+
+    $this->assertDatabaseCount('staff_members', 1);
+    $this->assertDatabaseMissing('users', ['email' => 'duplicado@test.com']);
+})->with([null, '1a']);
+
+it('valida la combinación final del carnet durante la edición parcial del usuario', function () {
+    $staff = createStaffForUserTest($this, '90000051');
+    $staff->update(['ci_complement' => '1A']);
+    $target = User::factory()->create(['staff_member_id' => $staff->id]);
+    createStaffForUserTest($this, '90000051', 'otro.personal@test.com');
+
+    $this->actingAs($this->manager, 'api')
+        ->patchJson('/api/admin/users/'.$target->id, [
+            'staff_member' => ['ci_complement' => null],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('staff_member.ci');
+
+    expect($staff->refresh()->ci_complement)->toBe('1A');
+
+    $this->patchJson('/api/admin/users/'.$target->id, [
+        'staff_member' => ['ci_complement' => '2b'],
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.staff_member.ci', '90000051')
+        ->assertJsonPath('data.staff_member.ci_complement', '2B');
+});
+
 it('rechaza una contraseña débil al crear usuario', function () {
     $staff = createStaffForUserTest($this);
 

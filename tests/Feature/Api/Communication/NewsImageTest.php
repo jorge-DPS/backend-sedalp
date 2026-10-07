@@ -51,7 +51,6 @@ function createNewsForMediaTest(User $creator): News
         'title' => 'Noticia multimedia',
         'subtitle' => null,
         'excerpt' => 'Resumen multimedia.',
-        'description' => 'Descripción multimedia.',
         'content' => [
             'type' => 'doc',
             'content' => [],
@@ -60,7 +59,7 @@ function createNewsForMediaTest(User $creator): News
         'published_at' => null,
     ]);
 
-    $news->slug = 'noticia-multimedia';
+    $news->slug = '200000000009';
     $news->created_by = $creator->id;
 
     $news->save();

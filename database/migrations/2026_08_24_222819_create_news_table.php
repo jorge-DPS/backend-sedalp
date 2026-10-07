@@ -21,7 +21,7 @@ return new class extends Migration
                 ->constrained('users')
                 ->restrictOnDelete();
 
-            $table->string('slug', 255)
+            $table->string('slug', 12)
                 ->unique();
 
             $table->string('title', 255);
@@ -30,8 +30,6 @@ return new class extends Migration
                 ->nullable();
 
             $table->text('excerpt');
-
-            $table->text('description');
 
             /*
              * Documento generado por TipTap.
@@ -63,6 +61,18 @@ return new class extends Migration
             $table->index('created_by');
             $table->index('updated_by');
         });
+
+        DB::statement('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+
+        DB::statement(<<<'SQL'
+            ALTER TABLE news
+            ADD CONSTRAINT news_slug_format_check
+            CHECK (slug ~ '^[1-9][0-9]{11}$')
+            SQL);
+
+        DB::statement('CREATE INDEX news_title_trgm_idx ON news USING GIN (title gin_trgm_ops)');
+        DB::statement('CREATE INDEX news_subtitle_trgm_idx ON news USING GIN (subtitle gin_trgm_ops)');
+        DB::statement('CREATE INDEX news_excerpt_trgm_idx ON news USING GIN (excerpt gin_trgm_ops)');
 
         /*
          * Solo se permiten los estados definidos

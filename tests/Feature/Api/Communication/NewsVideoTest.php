@@ -38,7 +38,6 @@ function createNewsForVideoTest(User $creator): News
         'title' => 'Noticia con videos',
         'subtitle' => null,
         'excerpt' => 'Resumen para pruebas.',
-        'description' => 'Descripción para pruebas.',
         'content' => [
             'type' => 'doc',
             'content' => [],
@@ -47,7 +46,7 @@ function createNewsForVideoTest(User $creator): News
         'published_at' => null,
     ]);
 
-    $news->slug = 'noticia-con-videos';
+    $news->slug = '200000000010';
     $news->created_by = $creator->id;
 
     $news->save();

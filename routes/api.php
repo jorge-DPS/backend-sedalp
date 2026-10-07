@@ -54,6 +54,8 @@ Route::prefix('admin')
     ])
     ->scopeBindings()->group(function () {
 
+        require __DIR__.'/api/territory.php';
+
         // NOTICIAS
 
         Route::get('/news', [NewsController::class, 'index'])->middleware('can:news.view');
@@ -356,5 +358,3 @@ Route::prefix('admin')
             [UserController::class, 'destroy']
         )->middleware('can:users.delete');
     });
-
-    require __DIR__.'/api/public/news.php';
