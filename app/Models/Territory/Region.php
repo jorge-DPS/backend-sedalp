@@ -6,6 +6,7 @@ use Database\Factories\Territory\RegionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Region extends Model
@@ -35,5 +36,11 @@ class Region extends Model
     public function municipalities(): HasMany
     {
         return $this->hasMany(Municipality::class);
+    }
+
+    /** @return HasOne<RegionBoundary, $this> */
+    public function boundary(): HasOne
+    {
+        return $this->hasOne(RegionBoundary::class);
     }
 }

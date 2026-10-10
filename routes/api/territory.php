@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Admin\Territory\MunicipalityController;
 use App\Http\Controllers\Api\Admin\Territory\ProvinceController;
+use App\Http\Controllers\Api\Admin\Territory\RegionBoundaryController;
 use App\Http\Controllers\Api\Admin\Territory\RegionController;
 use Illuminate\Support\Facades\Route;
 
@@ -25,3 +26,8 @@ Route::apiResource('municipalities', MunicipalityController::class)
     ->middlewareFor('store', 'can:municipalities.create')
     ->middlewareFor('update', 'can:municipalities.update')
     ->middlewareFor('destroy', 'can:municipalities.delete');
+
+Route::get('regions/{region}/boundary', RegionBoundaryController::class)
+    ->whereNumber('region')
+    ->middleware('can:regions.view')
+    ->name('regions.boundary.show');
