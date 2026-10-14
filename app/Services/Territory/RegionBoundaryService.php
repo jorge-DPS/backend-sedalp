@@ -4,11 +4,24 @@ namespace App\Services\Territory;
 
 use App\Models\Territory\Region;
 use App\Models\Territory\RegionBoundary;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class RegionBoundaryService
 {
+    /** @return Collection<int, RegionBoundary> */
+    public function all(): Collection
+    {
+        return RegionBoundary::query()
+            ->select(['id', 'region_id', 'updated_at'])
+            ->selectRaw('ST_AsGeoJSON(ST_ForcePolygonCCW(geom), 9, 0) AS geometry')
+            ->whereHas('region')
+            ->with('region:id,name,code')
+            ->orderBy('region_id')
+            ->get();
+    }
+
     public function find(Region $region): RegionBoundary
     {
         return $region->boundary()

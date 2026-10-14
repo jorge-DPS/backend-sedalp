@@ -102,3 +102,30 @@ it('rechaza un polígono que se cruza a sí mismo', function () {
 
     $this->assertDatabaseCount('region_boundaries', 0);
 });
+
+it('entrega todos los límites registrados en una colección sin incluir regiones eliminadas', function () {
+    $first = RegionBoundary::factory()->create();
+    $second = RegionBoundary::factory()->create();
+    $deleted = RegionBoundary::factory()->create();
+    $deleted->region->delete();
+    Region::factory()->create();
+
+    $this->getJson('/api/admin/region-boundaries')->assertUnauthorized();
+    $this->actingAs(User::factory()->create(), 'api')->getJson('/api/admin/region-boundaries')->assertForbidden();
+    $this->actingAs($this->mapUser, 'api')->getJson('/api/admin/region-boundaries')
+        ->assertOk()->assertHeader('Content-Type', 'application/geo+json')
+        ->assertJsonPath('type', 'FeatureCollection')
+        ->assertJsonCount(2, 'features')
+        ->assertJsonPath('features.0.properties.region_id', $first->region_id)
+        ->assertJsonPath('features.1.properties.region_id', $second->region_id)
+        ->assertJsonMissingPath('data')
+        ->assertJsonMissingPath('features.0.source_properties');
+});
+
+it('incluye nuevos límites al actualizar la colección y responde con una colección vacía cuando no hay límites', function () {
+    $this->actingAs($this->mapUser, 'api')->getJson('/api/admin/region-boundaries')
+        ->assertOk()->assertJsonPath('features', []);
+    $boundary = RegionBoundary::factory()->create();
+    $this->getJson('/api/admin/region-boundaries')->assertOk()
+        ->assertJsonCount(1, 'features')->assertJsonPath('features.0.properties.region_id', $boundary->region_id);
+});
