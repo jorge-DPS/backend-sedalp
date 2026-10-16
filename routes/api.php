@@ -55,6 +55,7 @@ Route::prefix('admin')
     ->scopeBindings()->group(function () {
 
         require __DIR__.'/api/territory.php';
+        require __DIR__.'/api/content.php';
 
         // NOTICIAS
 

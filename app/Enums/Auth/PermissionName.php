@@ -4,6 +4,10 @@ namespace App\Enums\Auth;
 
 enum PermissionName: string
 {
+    case CONTENT_VIEW = 'content.view';
+    case CONTENT_UPDATE = 'content.update';
+    case CONTENT_MEDIA_CREATE = 'content.media.create';
+    case CONTENT_MEDIA_DELETE = 'content.media.delete';
     // Personal
     case STAFF_VIEW = 'staff.view';
     case STAFF_CREATE = 'staff.create';
