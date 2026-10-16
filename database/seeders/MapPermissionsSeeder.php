@@ -12,7 +12,7 @@ class MapPermissionsSeeder extends Seeder
     public function run(): void
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
-        foreach ([PermissionName::MAPS_VIEW, PermissionName::MAPS_CREATE, PermissionName::MAPS_UPDATE] as $permission) {
+        foreach ([PermissionName::MAPS_VIEW, PermissionName::MAPS_CREATE, PermissionName::MAPS_UPDATE, PermissionName::MAPS_PUBLISH] as $permission) {
             Permission::findOrCreate($permission->value, 'api');
         }
         app(PermissionRegistrar::class)->forgetCachedPermissions();

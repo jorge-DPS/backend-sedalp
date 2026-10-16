@@ -45,6 +45,7 @@ enum PermissionName: string
     case MAPS_VIEW = 'maps.view';
     case MAPS_CREATE = 'maps.create';
     case MAPS_UPDATE = 'maps.update';
+    case MAPS_PUBLISH = 'maps.publish';
     // Regiones
     case REGIONS_VIEW = 'regions.view';
     case REGIONS_CREATE = 'regions.create';

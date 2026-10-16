@@ -36,8 +36,9 @@ class MapLayerService
                 if ($existing !== null) {
                     abort_unless((int) $layer->versions()->max('id') === (int) $attributes['expected_version_id'], 409, 'La capa cambió. Vuelva a abrirla antes de actualizar.');
                 } else {
-                    $layer->fill(collect($attributes)->only(['name', 'description', 'region_id', 'kind'])->all());
+                    $layer->fill(collect($attributes)->only(['name', 'description', 'region_id', 'kind', 'category'])->all());
                     $layer->created_by = $userId;
+                    $layer->category = $layer->kind === 'boundary' ? 'boundaries' : ($attributes['category'] ?? 'other');
                 }
 
                 if ($layer->region_id !== null) {
@@ -69,7 +70,7 @@ class MapLayerService
                     [$version->id, json_encode($collection['features'], JSON_THROW_ON_ERROR)],
                 );
 
-                return $layer->load(['region', 'currentVersion']);
+                return $layer->load(['region', 'currentVersion', 'publishedVersion']);
             });
         } catch (Throwable $exception) {
             Storage::disk('local')->delete($path);

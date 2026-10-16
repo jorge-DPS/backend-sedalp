@@ -23,10 +23,15 @@ class MapLayerController extends Controller
     {
         $filters = $request->validated();
 
-        return MapLayerResource::collection(MapLayer::query()->with(['region', 'currentVersion'])
+        return MapLayerResource::collection(MapLayer::query()->with(['region', 'currentVersion', 'publishedVersion'])
             ->when(filled($filters['search'] ?? null), fn (Builder $query): Builder => $query->whereLike('name', '%'.$filters['search'].'%'))
             ->when(filled($filters['region_id'] ?? null), fn (Builder $query): Builder => $query->where('region_id', $filters['region_id']))
             ->orderBy('name')->orderBy('id')->paginate($filters['per_page'] ?? 15)->withQueryString());
+    }
+
+    public function show(MapLayer $mapLayer): MapLayerResource
+    {
+        return new MapLayerResource($mapLayer->load(['region', 'currentVersion', 'publishedVersion']));
     }
 
     public function preview(UploadMapLayerRequest $request, MapFileService $files): JsonResponse
@@ -48,7 +53,9 @@ class MapLayerController extends Controller
 
     public function geoJson(MapLayer $mapLayer): JsonResponse
     {
-        return response()->json($this->layers->geoJson($mapLayer->currentVersion()->firstOrFail()), 200, ['Content-Type' => 'application/geo+json']);
+        $version = $mapLayer->currentVersion()->firstOrFail();
+
+        return response()->json($this->layers->geoJson($version) + ['version_id' => $version->id], 200, ['Content-Type' => 'application/geo+json']);
     }
 
     public function versions(MapLayer $mapLayer): AnonymousResourceCollection
