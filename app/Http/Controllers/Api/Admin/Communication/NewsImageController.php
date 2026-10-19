@@ -6,6 +6,7 @@ use App\DTOs\Media\ImageOptions;
 use App\Enums\Media\ImageFormat;
 use App\Enums\Media\ImageResizeMode;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Communication\DeleteNewsImagesRequest;
 use App\Http\Requests\Communication\ReorderNewsMediaRequest;
 use App\Http\Requests\Communication\StoreNewsImagesRequest;
 use App\Http\Requests\Communication\UpdateNewsImageRequest;
@@ -14,6 +15,7 @@ use App\Jobs\Media\CleanupImageFiles;
 use App\Models\Communication\News;
 use App\Models\Communication\NewsImage;
 use App\Services\Media\ImageService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -169,75 +171,84 @@ class NewsImageController extends Controller
         return new NewsImageResource($image);
     }
 
-    public function destroy(
-        News $news,
-        NewsImage $image
-    ): JsonResponse {
-        /*
-         * Protección adicional:
-         * la imagen debe pertenecer a la noticia
-         * indicada en la URL.
-         */
-        abort_unless(
-            $image->news_id === $news->id,
-            404
-        );
+    public function destroy(News $news, NewsImage $image): JsonResponse
+    {
+        abort_unless($image->news_id === $news->id, 404);
 
-        $filename = $image->filename;
+        return $this->deleteImages($news, [$image->id], 'Imagen eliminada correctamente.');
+    }
 
-        DB::transaction(function () use (
+    public function destroyMany(DeleteNewsImagesRequest $request, News $news): JsonResponse
+    {
+        return $this->deleteImages(
             $news,
-            $image
-        ): void {
+            $request->validated('ids'),
+            'Imágenes eliminadas correctamente.',
+        );
+    }
+
+    /**
+     * @param  list<int>  $ids
+     */
+    private function deleteImages(News $news, array $ids, string $message): JsonResponse
+    {
+        $deletedImages = DB::transaction(function () use ($news, $ids): Collection {
             $this->lockNewsForMediaMutation($news);
 
-            $image->delete();
+            $selectedImages = $news->images()->whereKey($ids)->get();
+
+            abort_unless(
+                $selectedImages->count() === count($ids),
+                422,
+                'La selección contiene imágenes que ya no existen o no pertenecen a esta noticia. Actualice la galería.',
+            );
+
+            foreach ($selectedImages as $image) {
+                $image->delete();
+            }
 
             $this->normalizePositions($news);
-
             $news->updated_by = auth('api')->id();
             $news->save();
+
+            return $selectedImages;
         });
 
-        /*
-         * PostgreSQL ya confirmó la eliminación
-         * y normalización de posiciones.
-         *
-         * Intentamos eliminar los archivos físicos
-         * inmediatamente.
-         *
-         * Si Storage falla, persistimos el trabajo
-         * en la cola para reintentar posteriormente.
-         */
         $mediaCleanupPending = false;
+        $mediaCleanupRetryFailed = false;
 
-        try {
-            $this->imageService->delete(
-                filename: $filename,
-                directory: NewsImage::MEDIA_DIRECTORY,
-            );
-        } catch (Throwable $exception) {
-            $mediaCleanupPending = true;
+        foreach ($deletedImages as $image) {
+            try {
+                $this->imageService->delete(
+                    filename: $image->filename,
+                    directory: NewsImage::MEDIA_DIRECTORY,
+                );
+            } catch (Throwable $exception) {
+                $mediaCleanupPending = true;
+                report($exception);
 
-            Log::error(
-                'No se pudieron eliminar inmediatamente los archivos físicos de una imagen de noticia.',
-                [
-                    'news_id' => $news->id,
-                    'filename' => $filename,
-                    'exception' => $exception->getMessage(),
-                ]
-            );
-
-            CleanupImageFiles::dispatch(
-                filename: $filename,
-                directory: NewsImage::MEDIA_DIRECTORY,
-            );
+                try {
+                    CleanupImageFiles::dispatch(
+                        filename: $image->filename,
+                        directory: NewsImage::MEDIA_DIRECTORY,
+                    );
+                } catch (Throwable $queueException) {
+                    $mediaCleanupRetryFailed = true;
+                    Log::error('No se pudo programar la limpieza de una imagen eliminada.', [
+                        'news_id' => $news->id,
+                        'filename' => $image->filename,
+                        'exception' => $queueException,
+                    ]);
+                }
+            }
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'Imagen eliminada correctamente.',
+            'message' => $message,
             'media_cleanup_pending' => $mediaCleanupPending,
+            'media_cleanup_retry_failed' => $mediaCleanupRetryFailed,
+            'data' => NewsImageResource::collection($news->images()->orderBy('position')->get()),
         ]);
     }
 

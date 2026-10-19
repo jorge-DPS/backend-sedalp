@@ -9,6 +9,7 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Spatie\Permission\Models\Role;
 
@@ -496,4 +497,142 @@ it('encola la limpieza cuando falla después de almacenar y la transacción revi
         fn (CleanupImageFiles $job): bool => $job->filename === $filename
             && $job->directory === NewsImage::MEDIA_DIRECTORY
     );
+});
+
+it('elimina una selección, borra sus variantes y permite reordenar las restantes', function () {
+    $images = collect(range(0, 4))->map(fn (int $position) => createImageForMediaTest(
+        $this->news, (string) Str::uuid(), $position,
+    ));
+    $disk = Storage::disk(config('media.disk', 'public'));
+    foreach ($images as $image) {
+        foreach (['webp', 'png', 'jpeg'] as $extension) {
+            $disk->put(NewsImage::MEDIA_DIRECTORY."/{$image->filename}.{$extension}", 'test');
+        }
+    }
+
+    $remaining = [$images[1]->id, $images[3]->id];
+    $this->actingAs($this->user, 'api')
+        ->deleteJson("/api/admin/news/{$this->news->id}/images", [
+            'ids' => [$images[0]->id, $images[2]->id, $images[4]->id],
+        ])
+        ->assertOk()
+        ->assertJsonPath('media_cleanup_pending', false)
+        ->assertJsonPath('data.0.id', $remaining[0])
+        ->assertJsonPath('data.0.position', 0)
+        ->assertJsonPath('data.1.id', $remaining[1])
+        ->assertJsonPath('data.1.position', 1)
+        ->assertJsonCount(2, 'data');
+
+    foreach ($images as $index => $image) {
+        foreach (['webp', 'png', 'jpeg'] as $extension) {
+            $path = NewsImage::MEDIA_DIRECTORY."/{$image->filename}.{$extension}";
+            if (in_array($index, [0, 2, 4])) {
+                $disk->assertMissing($path);
+            } else {
+                $disk->assertExists($path);
+            }
+        }
+    }
+    $this->putJson("/api/admin/news/{$this->news->id}/images/reorder", [
+        'items' => [
+            ['id' => $remaining[1], 'position' => 0],
+            ['id' => $remaining[0], 'position' => 1],
+        ],
+    ])->assertOk()->assertJsonPath('data.0.id', $remaining[1]);
+});
+
+it('rechaza selecciones vacías, duplicadas o demasiado grandes', function (array $ids) {
+    $this->actingAs($this->user, 'api')
+        ->deleteJson("/api/admin/news/{$this->news->id}/images", ['ids' => $ids])
+        ->assertUnprocessable();
+})->with([
+    'vacía' => [[]],
+    'duplicada' => [[1, 1]],
+    'límite' => [range(1, 101)],
+    'identificador inválido' => [['invalid']],
+]);
+
+it('protege la eliminación múltiple con autenticación y permisos', function () {
+    $url = "/api/admin/news/{$this->news->id}/images";
+    $this->deleteJson($url, ['ids' => [1]])->assertUnauthorized();
+    $this->actingAs(User::factory()->create(), 'api')
+        ->deleteJson($url, ['ids' => [1]])->assertForbidden();
+});
+
+it('rechaza toda la selección si incluye una imagen ajena o inexistente', function () {
+    $own = createImageForMediaTest($this->news, (string) Str::uuid(), 0);
+    $otherNews = $this->news->replicate();
+    $otherNews->slug = '200000000010';
+    $otherNews->save();
+    $other = createImageForMediaTest($otherNews, (string) Str::uuid(), 0);
+
+    foreach ([$other->id, 99999999] as $invalidId) {
+        $this->actingAs($this->user, 'api')
+            ->deleteJson("/api/admin/news/{$this->news->id}/images", ['ids' => [$own->id, $invalidId]])
+            ->assertUnprocessable();
+        $this->assertDatabaseHas('news_images', ['id' => $own->id, 'position' => 0]);
+        $this->assertDatabaseHas('news_images', ['id' => $other->id]);
+    }
+});
+
+it('permite eliminar todas las imágenes', function () {
+    $image = createImageForMediaTest($this->news, (string) Str::uuid(), 0);
+    $this->actingAs($this->user, 'api')
+        ->deleteJson("/api/admin/news/{$this->news->id}/images", ['ids' => [$image->id]])
+        ->assertOk()->assertJsonCount(0, 'data');
+    expect($this->news->images()->count())->toBe(0);
+});
+
+it('continúa limpiando las demás imágenes cuando falla un archivo', function () {
+    Queue::fake();
+    $first = createImageForMediaTest($this->news, (string) Str::uuid(), 0);
+    $second = createImageForMediaTest($this->news, (string) Str::uuid(), 1);
+    $service = Mockery::mock(ImageService::class);
+    $service->shouldReceive('delete')->once()->with($first->filename, NewsImage::MEDIA_DIRECTORY)
+        ->andThrow(new RuntimeException('Storage no disponible.'));
+    $service->shouldReceive('delete')->once()->with($second->filename, NewsImage::MEDIA_DIRECTORY);
+    $this->app->instance(ImageService::class, $service);
+
+    $this->actingAs($this->user, 'api')
+        ->deleteJson("/api/admin/news/{$this->news->id}/images", ['ids' => [$first->id, $second->id]])
+        ->assertOk()->assertJsonPath('media_cleanup_pending', true)
+        ->assertJsonPath('media_cleanup_retry_failed', false)->assertJsonCount(0, 'data');
+    Queue::assertPushed(CleanupImageFiles::class, fn (CleanupImageFiles $job) => $job->filename === $first->filename);
+});
+
+it('informa cuando tampoco se puede programar la limpieza física', function () {
+    Queue::shouldReceive('connection')->andThrow(new RuntimeException('Cola no disponible.'));
+    $image = createImageForMediaTest($this->news, (string) Str::uuid(), 0);
+    $service = Mockery::mock(ImageService::class);
+    $service->shouldReceive('delete')->once()->andThrow(new RuntimeException('Storage no disponible.'));
+    $this->app->instance(ImageService::class, $service);
+
+    $this->actingAs($this->user, 'api')
+        ->deleteJson("/api/admin/news/{$this->news->id}/images", ['ids' => [$image->id]])
+        ->assertOk()->assertJsonPath('media_cleanup_pending', true)
+        ->assertJsonPath('media_cleanup_retry_failed', true)->assertJsonCount(0, 'data');
+    $this->assertDatabaseMissing('news_images', ['id' => $image->id]);
+});
+
+it('revierte la eliminación si falla la actualización del orden', function () {
+    $first = createImageForMediaTest($this->news, (string) Str::uuid(), 0);
+    $second = createImageForMediaTest($this->news, (string) Str::uuid(), 1);
+    $service = Mockery::mock(ImageService::class);
+    $service->shouldNotReceive('delete');
+    $this->app->instance(ImageService::class, $service);
+    $dispatcher = NewsImage::getEventDispatcher();
+    NewsImage::setEventDispatcher(clone $dispatcher);
+    NewsImage::updating(function () {
+        throw new RuntimeException('Fallo de orden.');
+    });
+
+    try {
+        $this->actingAs($this->user, 'api')
+            ->deleteJson("/api/admin/news/{$this->news->id}/images", ['ids' => [$first->id]])
+            ->assertServerError();
+        $this->assertDatabaseHas('news_images', ['id' => $first->id, 'position' => 0]);
+        $this->assertDatabaseHas('news_images', ['id' => $second->id, 'position' => 1]);
+    } finally {
+        NewsImage::setEventDispatcher($dispatcher);
+    }
 });

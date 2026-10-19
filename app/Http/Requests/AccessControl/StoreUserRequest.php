@@ -96,7 +96,7 @@ class StoreUserRequest extends FormRequest
             ],
 
             'staff_member.organizational_unit_id' => [
-                'required_with:staff_member',
+                'nullable',
                 'integer',
                 $this->activeCatalogExistsRule('organizational_units'),
             ],
@@ -108,7 +108,7 @@ class StoreUserRequest extends FormRequest
             ],
 
             'staff_member.profession_id' => [
-                'required_with:staff_member',
+                'nullable',
                 'integer',
                 $this->activeCatalogExistsRule('professions'),
             ],

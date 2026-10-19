@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             RolesAndPermissionsSeeder::class,
+            PositionSeeder::class,
             SuperAdminSeeder::class,
             SiteContentPermissionsSeeder::class,
             SiteContentSeeder::class,

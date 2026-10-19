@@ -86,7 +86,7 @@ class UpdateUserRequest extends FormRequest
 
             'staff_member.organizational_unit_id' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'integer',
                 $this->activeCatalogExistsRule('organizational_units'),
             ],
@@ -100,7 +100,7 @@ class UpdateUserRequest extends FormRequest
 
             'staff_member.profession_id' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'integer',
                 $this->activeCatalogExistsRule('professions'),
             ],
@@ -160,9 +160,9 @@ class UpdateUserRequest extends FormRequest
                         [
                             'first_names',
                             'ci',
-                            'organizational_unit_id',
+
                             'position_id',
-                            'profession_id',
+
                         ] as $field
                     ) {
                         if (blank($staffData[$field] ?? null)) {

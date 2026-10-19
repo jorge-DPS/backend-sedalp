@@ -78,7 +78,7 @@ class UpdateStaffMemberRequest extends FormRequest
 
             'organizational_unit_id' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'integer',
                 Rule::exists('organizational_units', 'id')
                     ->where(
@@ -102,7 +102,7 @@ class UpdateStaffMemberRequest extends FormRequest
 
             'profession_id' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'integer',
                 Rule::exists('professions', 'id')
                     ->where(

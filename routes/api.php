@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AccessControl\AccessCatalogController;
+use App\Http\Controllers\Api\Admin\AccessControl\UserCatalogController;
 use App\Http\Controllers\Api\Admin\AccessControl\UserController;
 use App\Http\Controllers\Api\Admin\AccessControl\UserStatusController;
 use App\Http\Controllers\Api\Admin\AccessControl\UserTrashController;
@@ -126,6 +127,11 @@ Route::prefix('admin')
         Route::put('/news/{news}/images/reorder', [
             NewsImageController::class,
             'reorder',
+        ])->middleware('can:news.update');
+
+        Route::delete('/news/{news}/images', [
+            NewsImageController::class,
+            'destroyMany',
         ])->middleware('can:news.update');
 
         Route::delete('/news/{news}/images/{image}', [
@@ -326,6 +332,8 @@ Route::prefix('admin')
             'can:users.create',
             'can:roles.assign',
         ]);
+
+        Route::get('/users/catalogs', UserCatalogController::class);
 
         Route::get(
             '/users/{user}',

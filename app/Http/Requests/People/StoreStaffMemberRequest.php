@@ -69,7 +69,7 @@ class StoreStaffMemberRequest extends FormRequest
             ],
 
             'organizational_unit_id' => [
-                'required',
+                'nullable',
                 'integer',
                 Rule::exists('organizational_units', 'id')
                     ->where(
@@ -80,31 +80,31 @@ class StoreStaffMemberRequest extends FormRequest
             ],
 
             'position_id' => [
-            'required',
-            'integer',
-            Rule::exists('positions', 'id')
+                'required',
+                'integer',
+                Rule::exists('positions', 'id')
                     ->where(
                         fn ($query) => $query
                             ->where('active', true)
                             ->whereNull('deleted_at')
                     ),
-        ],
+            ],
 
             'profession_id' => [
-            'required',
-            'integer',
-            Rule::exists('professions', 'id')
+                'nullable',
+                'integer',
+                Rule::exists('professions', 'id')
                     ->where(
                         fn ($query) => $query
                             ->where('active', true)
                             ->whereNull('deleted_at')
                     ),
-        ],
+            ],
 
             'active' => [
-            'sometimes',
-            'boolean',
-        ],
+                'sometimes',
+                'boolean',
+            ],
         ];
     }
 
