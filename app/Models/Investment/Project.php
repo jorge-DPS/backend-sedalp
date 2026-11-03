@@ -2,11 +2,14 @@
 
 namespace App\Models\Investment;
 
+use App\Models\Territory\Municipality;
 use App\Models\Territory\Province;
 use Database\Factories\Investment\ProjectFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Project extends Model
@@ -89,5 +92,54 @@ class Project extends Model
     public function mainProvince(): BelongsTo
     {
         return $this->belongsTo(Province::class, 'main_province_id');
+    }
+
+    /** @return BelongsToMany<Province, $this> */
+    public function provinces(): BelongsToMany
+    {
+        return $this->belongsToMany(Province::class, 'project_provinces')->withTimestamps();
+    }
+
+    /** @return BelongsToMany<Municipality, $this> */
+    public function municipalities(): BelongsToMany
+    {
+        return $this->belongsToMany(Municipality::class, 'project_municipalities')->withTimestamps();
+    }
+
+    /**
+     * @param  Builder<Project>  $query
+     * @return Builder<Project>
+     */
+    public function scopeInProvince(Builder $query, int $provinceId): Builder
+    {
+        return $query->whereHas('provinces', fn (Builder $provinces): Builder => $provinces->whereKey($provinceId));
+    }
+
+    /**
+     * @param  Builder<Project>  $query
+     * @return Builder<Project>
+     */
+    public function scopeInMunicipality(Builder $query, int $municipalityId): Builder
+    {
+        return $query->whereHas('municipalities', fn (Builder $municipalities): Builder => $municipalities->whereKey($municipalityId));
+    }
+
+    /**
+     * @param  Builder<Project>  $query
+     * @return Builder<Project>
+     */
+    public function scopeInCurrentRegion(Builder $query, int $regionId): Builder
+    {
+        return $query->whereHas('municipalities', fn (Builder $municipalities): Builder => $municipalities->where('region_id', $regionId));
+    }
+
+    /**
+     * @param  Builder<Project>  $query
+     * @return Builder<Project>
+     */
+    public function scopeInRegionOn(Builder $query, int $regionId, string $date): Builder
+    {
+        return $query->whereHas('municipalities.regionMemberships', fn (Builder $memberships): Builder => $memberships
+            ->where('region_id', $regionId)->validOn($date));
     }
 }

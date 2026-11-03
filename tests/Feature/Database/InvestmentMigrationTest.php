@@ -4,11 +4,11 @@ use App\Models\Territory\Province;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-it('revierte y vuelve a ejecutar las seis migraciones sin modificar las provincias existentes', function (): void {
+it('revierte y vuelve a ejecutar las migraciones de inversión sin modificar las provincias existentes', function (): void {
     expect(DB::connection()->getDriverName())->toBe('pgsql');
 
     $province = Province::factory()->create();
-    $tables = ['institutions', 'sectors', 'strategic_axes', 'intervention_types', 'project_statuses', 'projects'];
+    $tables = ['institutions', 'sectors', 'strategic_axes', 'intervention_types', 'project_statuses', 'projects', 'project_provinces', 'project_municipalities'];
     $schemas = [];
     $migrations = [];
 
