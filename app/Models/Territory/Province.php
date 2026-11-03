@@ -2,6 +2,7 @@
 
 namespace App\Models\Territory;
 
+use App\Models\Investment\Project;
 use Database\Factories\Territory\ProvinceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -35,5 +36,15 @@ class Province extends Model
     public function municipalities(): HasMany
     {
         return $this->hasMany(Municipality::class);
+    }
+
+    /**
+     * Proyectos cuya provincia principal fue informada por la fuente.
+     *
+     * @return HasMany<Project, $this>
+     */
+    public function mainProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'main_province_id');
     }
 }

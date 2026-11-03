@@ -38,6 +38,12 @@ class Region extends Model
         return $this->hasMany(Municipality::class);
     }
 
+    /** @return HasMany<MunicipalityRegionMembership, $this> */
+    public function municipalityMemberships(): HasMany
+    {
+        return $this->hasMany(MunicipalityRegionMembership::class);
+    }
+
     /** @return HasOne<RegionBoundary, $this> */
     public function boundary(): HasOne
     {

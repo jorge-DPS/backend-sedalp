@@ -15,14 +15,9 @@ class NewsDetailResource extends JsonResource
             'subtitle' => $this->subtitle,
             'excerpt' => $this->excerpt,
             'content' => $this->content,
-            'publishedAt' => $this->published_at
-                ?->toDateString(),
-            'images' => $this->relationLoaded('images')
-                ? NewsImageResource::collection($this->images)
-                : [],
-            'videos' => $this->relationLoaded('videos')
-                ? NewsVideoResource::collection($this->videos)
-                : [],
+            'publishedAt' => $this->published_at?->toDateString(),
+            'images' => $this->relationLoaded('images') ? NewsImageResource::collection($this->images) : [],
+            'videos' => $this->relationLoaded('videos') ? NewsVideoResource::collection($this->videos) : [],
         ];
     }
 }

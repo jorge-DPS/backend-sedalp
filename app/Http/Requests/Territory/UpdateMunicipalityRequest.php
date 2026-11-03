@@ -25,6 +25,10 @@ class UpdateMunicipalityRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:150'],
             'official_code' => ['sometimes', 'nullable', 'string', 'max:20', Rule::unique(Municipality::class, 'official_code')->ignore($this->route('municipality'))],
             'active' => ['sometimes', 'boolean'],
+            'valid_from' => ['sometimes', 'required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'agreement_reference' => ['sometimes', 'required', 'string', 'max:255'],
+            'agreement_date' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'notes' => ['sometimes', 'nullable', 'string'],
         ];
     }
 
@@ -55,7 +59,7 @@ class UpdateMunicipalityRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        foreach (['name', 'official_code'] as $field) {
+        foreach (['name', 'official_code', 'agreement_reference'] as $field) {
             $value = $this->input($field);
 
             if (is_string($value)) {

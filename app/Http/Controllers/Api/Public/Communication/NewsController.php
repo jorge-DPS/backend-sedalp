@@ -15,12 +15,9 @@ class NewsController extends Controller
         private readonly NewsService $newsService
     ) {}
 
-    public function index(
-        IndexNewsRequest $request
-    ): AnonymousResourceCollection {
-        $news = $this->newsService->paginate(
-            $request->validated()
-        );
+    public function index(IndexNewsRequest $request): AnonymousResourceCollection
+    {
+        $news = $this->newsService->paginate($request->validated());
 
         return NewsListResource::collection($news);
     }

@@ -6,6 +6,7 @@ use Database\Factories\Territory\MunicipalityFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Municipality extends Model
@@ -43,5 +44,11 @@ class Municipality extends Model
     public function province(): BelongsTo
     {
         return $this->belongsTo(Province::class);
+    }
+
+    /** @return HasMany<MunicipalityRegionMembership, $this> */
+    public function regionMemberships(): HasMany
+    {
+        return $this->hasMany(MunicipalityRegionMembership::class);
     }
 }
