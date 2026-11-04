@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Project extends Model
@@ -34,6 +35,7 @@ class Project extends Model
         'intervention_type_id',
         'project_status_id',
         'main_province_id',
+        'primary_investment_source_id',
         'source_code',
         'name',
         'short_name',
@@ -92,6 +94,18 @@ class Project extends Model
     public function mainProvince(): BelongsTo
     {
         return $this->belongsTo(Province::class, 'main_province_id');
+    }
+
+    /** @return BelongsTo<InvestmentSource, $this> */
+    public function primaryInvestmentSource(): BelongsTo
+    {
+        return $this->belongsTo(InvestmentSource::class, 'primary_investment_source_id');
+    }
+
+    /** @return HasMany<ProjectBudget, $this> */
+    public function budgets(): HasMany
+    {
+        return $this->hasMany(ProjectBudget::class);
     }
 
     /** @return BelongsToMany<Province, $this> */

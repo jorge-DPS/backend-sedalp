@@ -36,4 +36,10 @@ class Institution extends Model
     {
         return $this->hasMany(Project::class);
     }
+
+    /** @return HasMany<InvestmentSource, $this> */
+    public function investmentSources(): HasMany
+    {
+        return $this->hasMany(InvestmentSource::class);
+    }
 }

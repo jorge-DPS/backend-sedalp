@@ -3,6 +3,8 @@
 namespace App\Models\Territory;
 
 use App\Models\Investment\Project;
+use App\Models\Municipal\MunicipalAuthority;
+use App\Models\Municipal\MunicipalPoa;
 use Database\Factories\Territory\MunicipalityFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -58,5 +60,17 @@ class Municipality extends Model
     public function projects(): BelongsToMany
     {
         return $this->belongsToMany(Project::class, 'project_municipalities')->withTimestamps();
+    }
+
+    /** @return HasMany<MunicipalPoa, $this> */
+    public function municipalPoas(): HasMany
+    {
+        return $this->hasMany(MunicipalPoa::class);
+    }
+
+    /** @return HasMany<MunicipalAuthority, $this> */
+    public function municipalAuthorities(): HasMany
+    {
+        return $this->hasMany(MunicipalAuthority::class);
     }
 }

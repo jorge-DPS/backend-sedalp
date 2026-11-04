@@ -8,7 +8,8 @@ it('revierte y vuelve a ejecutar las migraciones de inversión sin modificar las
     expect(DB::connection()->getDriverName())->toBe('pgsql');
 
     $province = Province::factory()->create();
-    $tables = ['institutions', 'sectors', 'strategic_axes', 'intervention_types', 'project_statuses', 'projects', 'project_provinces', 'project_municipalities'];
+    $tables = ['institutions', 'sectors', 'strategic_axes', 'intervention_types', 'project_statuses', 'projects', 'project_provinces', 'project_municipalities', 'investment_sources', 'project_budgets', 'project_budget_revisions'];
+    $sourceMigration = require database_path('migrations/2026_11_04_180318_add_primary_investment_source_id_to_projects_table.php');
     $schemas = [];
     $migrations = [];
 
@@ -24,6 +25,8 @@ it('revierte y vuelve a ejecutar las migraciones de inversión sin modificar las
         $migrations[] = require $paths[0];
     }
 
+    $sourceMigration->down();
+
     foreach (array_reverse($migrations) as $migration) {
         $migration->down();
     }
@@ -37,6 +40,8 @@ it('revierte y vuelve a ejecutar las migraciones de inversión sin modificar las
     foreach ($migrations as $migration) {
         $migration->up();
     }
+
+    $sourceMigration->up();
 
     foreach ($tables as $table) {
         expect([
