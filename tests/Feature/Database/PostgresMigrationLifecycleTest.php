@@ -66,6 +66,11 @@ it('reconstruye repetidamente la base de pruebas conservando las funciones y res
 
 it('elimina las funciones y triggers propios al revertir y los restaura al migrar nuevamente', function (string $migrationPath, array $functionNames, array $triggerNames): void {
     $migration = require database_path($migrationPath);
+    $historyMigration = require database_path('migrations/2026_11_05_202629_add_source_history_to_project_budget_revisions_table.php');
+
+    if (in_array('simred_guard_budget_update', $functionNames, true)) {
+        $historyMigration->down();
+    }
 
     $migration->down();
 
@@ -76,6 +81,10 @@ it('elimina las funciones y triggers propios al revertir y los restaura al migra
     expect(DB::table('pg_trigger')->whereIn('tgname', $triggerNames)->exists())->toBeFalse();
 
     $migration->up();
+
+    if (in_array('simred_guard_budget_update', $functionNames, true)) {
+        $historyMigration->up();
+    }
 
     foreach ($functionNames as $name) {
         expect(DB::selectOne('SELECT to_regprocedure(?) IS NOT NULL AS present', [$name.'()'])->present)->toBeTrue();

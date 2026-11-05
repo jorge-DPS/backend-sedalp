@@ -59,4 +59,10 @@ class InvestmentSource extends Model
     {
         return $this->hasMany(ProjectBudgetRevision::class);
     }
+
+    /** @return HasMany<ProjectBudgetRevision, $this> */
+    public function previousBudgetRevisions(): HasMany
+    {
+        return $this->hasMany(ProjectBudgetRevision::class, 'previous_investment_source_id');
+    }
 }

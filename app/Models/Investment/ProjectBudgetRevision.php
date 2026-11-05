@@ -20,6 +20,10 @@ class ProjectBudgetRevision extends Model
         'new_amount_bob',
         'previous_availability_status',
         'new_availability_status',
+        'previous_investment_source_id',
+        'previous_source_reference',
+        'previous_funding_source',
+        'new_funding_source',
         'investment_source_id',
         'source_reference',
         'effective_date',
@@ -49,5 +53,11 @@ class ProjectBudgetRevision extends Model
     public function investmentSource(): BelongsTo
     {
         return $this->belongsTo(InvestmentSource::class);
+    }
+
+    /** @return BelongsTo<InvestmentSource, $this> */
+    public function previousInvestmentSource(): BelongsTo
+    {
+        return $this->belongsTo(InvestmentSource::class, 'previous_investment_source_id');
     }
 }

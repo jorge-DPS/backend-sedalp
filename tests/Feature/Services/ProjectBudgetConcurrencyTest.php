@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Investment\InvestmentSource;
 use App\Models\Investment\Project;
 use App\Models\Investment\ProjectBudget;
 use Illuminate\Support\Facades\DB;
@@ -36,8 +37,15 @@ it('serializa dos revisiones simultáneas sin duplicar números ni perder el val
 
         $sourceMigration = require database_path('migrations/2026_11_04_180318_add_primary_investment_source_id_to_projects_table.php');
         $sourceMigration->up();
+        $historyMigration = require database_path('migrations/2026_11_05_202629_add_source_history_to_project_budget_revisions_table.php');
+        $historyMigration->up();
         $project = Project::factory()->create();
-        $budget = ProjectBudget::factory()->reported('100.00')->for($project)->create();
+        $sources = InvestmentSource::factory()->count(3)->create(['institution_id' => $project->institution_id]);
+        $budget = ProjectBudget::factory()->reported('100.00')->for($project)->create([
+            'investment_source_id' => $sources[0]->id,
+            'source_reference' => 'Documento inicial',
+            'funding_source' => 'Recursos propios',
+        ]);
         $setup = DB::connection('budget_concurrency');
         DB::setDefaultConnection($originalConnection);
         Schema::clearResolvedInstance('db.schema');
@@ -56,6 +64,9 @@ Illuminate\Support\Facades\DB::select("SELECT set_config('application_name', ?, 
 $budget = App\Models\Investment\ProjectBudget::findOrFail((int) $argv[2]);
 app(App\Services\Investment\ProjectBudgetService::class)->revise($budget, [
     'amount_bob' => $argv[4], 'availability_status' => 'reported',
+    'investment_source_id' => (int) $argv[5],
+    'source_reference' => 'Documento '.$argv[4],
+    'funding_source' => 'Financiamiento '.$argv[4],
 ]);
 PHP;
 
@@ -66,7 +77,7 @@ PHP;
         foreach (['200.00', '300.00'] as $index => $amount) {
             $name = $schema.'_'.$index;
             $names[] = $name;
-            $process = new Process([PHP_BINARY, '-r', $worker, $schema, (string) $budget->id, $name, $amount], base_path(), ['APP_ENV' => 'testing', 'PAO_DISABLE' => 'true']);
+            $process = new Process([PHP_BINARY, '-r', $worker, $schema, (string) $budget->id, $name, $amount, (string) $sources[$index + 1]->id], base_path(), ['APP_ENV' => 'testing', 'PAO_DISABLE' => 'true']);
             $process->setTimeout(20);
             $process->start();
             $processes[] = $process;
@@ -102,6 +113,15 @@ PHP;
             ->and($revisions->pluck('revision_number')->all())->toBe([1, 2])
             ->and($revisions[0]->previous_amount_bob)->toBe('100.00')
             ->and($revisions[1]->previous_amount_bob)->toBe($revisions[0]->new_amount_bob)
+            ->and($revisions[0]->previous_investment_source_id)->toBe($sources[0]->id)
+            ->and($revisions[0]->previous_source_reference)->toBe('Documento inicial')
+            ->and($revisions[0]->previous_funding_source)->toBe('Recursos propios')
+            ->and($revisions[1]->previous_investment_source_id)->toBe($revisions[0]->investment_source_id)
+            ->and($revisions[1]->previous_source_reference)->toBe($revisions[0]->source_reference)
+            ->and($revisions[1]->previous_funding_source)->toBe($revisions[0]->new_funding_source)
+            ->and($current->investment_source_id)->toBe($revisions[1]->investment_source_id)
+            ->and($current->source_reference)->toBe($revisions[1]->source_reference)
+            ->and($current->funding_source)->toBe($revisions[1]->new_funding_source)
             ->and($current->amount_bob)->toBe($revisions[1]->new_amount_bob)
             ->and($revisions->pluck('new_amount_bob')->sort()->values()->all())->toBe(['200.00', '300.00'])
             ->and($setup->table('project_budgets')->count())->toBe(1);

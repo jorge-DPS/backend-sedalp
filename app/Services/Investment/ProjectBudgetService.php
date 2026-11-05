@@ -33,7 +33,7 @@ class ProjectBudgetService
         });
     }
 
-    /** @param array{amount_bob: string|int|null, availability_status: string|BudgetAvailabilityStatus, investment_source_id?: int|null, source_reference?: string|null, effective_date?: string|null, reason?: string|null} $data */
+    /** @param array{amount_bob: string|int|null, availability_status: string|BudgetAvailabilityStatus, investment_source_id?: int|null, source_reference?: string|null, funding_source?: string|null, effective_date?: string|null, reason?: string|null} $data */
     public function revise(ProjectBudget $budget, array $data): ProjectBudget
     {
         return DB::transaction(function () use ($budget, $data): ProjectBudget {
@@ -42,15 +42,17 @@ class ProjectBudgetService
             $values = $this->validateValues(array_replace([
                 'investment_source_id' => $budget->investment_source_id,
                 'source_reference' => $budget->source_reference,
+                'funding_source' => $budget->funding_source,
             ], $data), false);
             $this->validateSource($project->institution_id, $values['investment_source_id'] ?? null);
 
-            $current = Arr::only($values, ['amount_bob', 'availability_status', 'investment_source_id', 'source_reference']);
+            $current = Arr::only($values, ['amount_bob', 'availability_status', 'investment_source_id', 'source_reference', 'funding_source']);
 
             if ($budget->amount_bob === $current['amount_bob']
                 && $budget->availability_status->value === $current['availability_status']
                 && $budget->investment_source_id === $current['investment_source_id']
-                && $budget->source_reference === $current['source_reference']) {
+                && $budget->source_reference === $current['source_reference']
+                && $budget->funding_source === $current['funding_source']) {
                 return $budget;
             }
 
@@ -60,8 +62,12 @@ class ProjectBudgetService
                 'new_amount_bob' => $current['amount_bob'],
                 'previous_availability_status' => $budget->availability_status,
                 'new_availability_status' => $current['availability_status'],
+                'previous_investment_source_id' => $budget->investment_source_id,
+                'previous_source_reference' => $budget->source_reference,
+                'previous_funding_source' => $budget->funding_source,
                 'investment_source_id' => $current['investment_source_id'],
                 'source_reference' => $current['source_reference'],
+                'new_funding_source' => $current['funding_source'],
                 'effective_date' => $values['effective_date'] ?? null,
                 'reason' => $values['reason'] ?? null,
             ]);
@@ -92,11 +98,11 @@ class ProjectBudgetService
             'availability_status' => ['required', Rule::enum(BudgetAvailabilityStatus::class)],
             'investment_source_id' => ['sometimes', 'nullable', 'integer'],
             'source_reference' => ['sometimes', 'nullable', 'string'],
+            'funding_source' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
 
         $rules += $creating ? [
             'fiscal_year' => ['required', 'integer', 'between:1900,2100'],
-            'funding_source' => ['sometimes', 'nullable', 'string', 'max:255'],
             'verified_at' => ['sometimes', 'nullable', 'date'],
             'notes' => ['sometimes', 'nullable', 'string'],
         ] : [
