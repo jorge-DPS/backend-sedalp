@@ -22,7 +22,7 @@ class ProjectBudgetService
         $values = $this->validateValues($data, true);
 
         return DB::transaction(function () use ($project, $values): ProjectBudget {
-            $project = Project::query()->sharedLock()->findOrFail($project->getKey());
+            $project = Project::query()->lockForUpdate()->findOrFail($project->getKey());
             $this->validateSource($project->institution_id, $values['investment_source_id'] ?? null);
 
             if ($project->budgets()->where('fiscal_year', $values['fiscal_year'])->exists()) {

@@ -30,6 +30,8 @@ class RolesAndPermissionsSeeder extends Seeder
         // 3. Recién ahora asignar permisos
         $this->assignPermissionsToRoles();
 
+        $this->call(InvestmentPermissionsSeeder::class);
+
         // Limpiar nuevamente
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
@@ -61,7 +63,7 @@ class RolesAndPermissionsSeeder extends Seeder
             self::GUARD
         );
 
-        $director->syncPermissions([
+        $director->givePermissionTo([
             PermissionName::STAFF_VIEW->value,
 
             PermissionName::REGIONS_VIEW->value,
@@ -80,7 +82,7 @@ class RolesAndPermissionsSeeder extends Seeder
             self::GUARD
         );
 
-        $responsableProgramas->syncPermissions([
+        $responsableProgramas->givePermissionTo([
             PermissionName::REGIONS_VIEW->value,
             PermissionName::PROVINCES_VIEW->value,
             PermissionName::MUNICIPALITIES_VIEW->value,
@@ -97,7 +99,7 @@ class RolesAndPermissionsSeeder extends Seeder
             self::GUARD
         );
 
-        $comunicador->syncPermissions([
+        $comunicador->givePermissionTo([
             PermissionName::NEWS_VIEW->value,
             PermissionName::NEWS_CREATE->value,
             PermissionName::NEWS_UPDATE->value,
@@ -105,7 +107,7 @@ class RolesAndPermissionsSeeder extends Seeder
             PermissionName::NEWS_PUBLISH->value,
         ]);
 
-        $tecnico->syncPermissions([
+        $tecnico->givePermissionTo([
             PermissionName::REGIONS_VIEW->value,
             PermissionName::PROVINCES_VIEW->value,
             PermissionName::MUNICIPALITIES_VIEW->value,

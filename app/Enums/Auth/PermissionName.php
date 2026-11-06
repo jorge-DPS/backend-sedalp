@@ -4,6 +4,18 @@ namespace App\Enums\Auth;
 
 enum PermissionName: string
 {
+    case INVESTMENT_CATALOGS_VIEW = 'investment.catalogs.view';
+    case INVESTMENT_PROJECTS_VIEW = 'investment.projects.view';
+    case INVESTMENT_PROJECTS_CREATE = 'investment.projects.create';
+    case INVESTMENT_PROJECTS_UPDATE = 'investment.projects.update';
+    case INVESTMENT_PROJECTS_DELETE = 'investment.projects.delete';
+    case INVESTMENT_SOURCES_VIEW = 'investment.sources.view';
+    case INVESTMENT_SOURCES_CREATE = 'investment.sources.create';
+    case INVESTMENT_SOURCES_UPDATE = 'investment.sources.update';
+    case INVESTMENT_BUDGETS_VIEW = 'investment.budgets.view';
+    case INVESTMENT_BUDGETS_CREATE = 'investment.budgets.create';
+    case INVESTMENT_BUDGETS_REVISE = 'investment.budgets.revise';
+
     case CONTENT_VIEW = 'content.view';
     case CONTENT_UPDATE = 'content.update';
     case CONTENT_MEDIA_CREATE = 'content.media.create';
