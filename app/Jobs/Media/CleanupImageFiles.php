@@ -22,6 +22,7 @@ class CleanupImageFiles implements ShouldBeUnique, ShouldQueue
     public function __construct(
         public readonly string $filename,
         public readonly string $directory,
+        public readonly ?string $disk = null,
     ) {}
 
     /**
@@ -41,7 +42,7 @@ class CleanupImageFiles implements ShouldBeUnique, ShouldQueue
     {
         return sprintf(
             '%s:%s/%s',
-            config('media.disk', 'public'),
+            $this->disk ?? config('media.disk', 'public'),
             $this->directory,
             $this->filename,
         );
@@ -50,9 +51,16 @@ class CleanupImageFiles implements ShouldBeUnique, ShouldQueue
     public function handle(
         ImageService $imageService
     ): void {
+        if (($this->disk ?? null) === null) {
+            $imageService->delete(filename: $this->filename, directory: $this->directory);
+
+            return;
+        }
+
         $imageService->delete(
             filename: $this->filename,
             directory: $this->directory,
+            disk: $this->disk,
         );
     }
 

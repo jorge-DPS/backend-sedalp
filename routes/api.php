@@ -58,6 +58,7 @@ Route::prefix('admin')
         require __DIR__.'/api/territory.php';
         require __DIR__.'/api/content.php';
         require __DIR__.'/api/investment.php';
+        require __DIR__.'/api/municipal.php';
 
         // NOTICIAS
 

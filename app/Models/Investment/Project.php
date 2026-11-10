@@ -57,6 +57,7 @@ class Project extends Model
         return [
             'total_cost_bob' => 'decimal:2',
             'source_year' => 'integer',
+            'published_at' => 'immutable_datetime',
         ];
     }
 
@@ -106,6 +107,17 @@ class Project extends Model
     public function budgets(): HasMany
     {
         return $this->hasMany(ProjectBudget::class);
+    }
+
+    /** @param Builder<Project> $query */
+    public function scopePubliclyAvailable(Builder $query): Builder
+    {
+        return $query->whereNotNull('published_at')->where('published_at', '<=', now());
+    }
+
+    public function isPubliclyAvailable(): bool
+    {
+        return $this->published_at !== null && $this->published_at->lte(now());
     }
 
     /** @return BelongsToMany<Province, $this> */

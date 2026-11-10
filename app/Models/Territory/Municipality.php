@@ -6,6 +6,7 @@ use App\Models\Investment\Project;
 use App\Models\Municipal\MunicipalAuthority;
 use App\Models\Municipal\MunicipalPoa;
 use Database\Factories\Territory\MunicipalityFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -72,5 +73,13 @@ class Municipality extends Model
     public function municipalAuthorities(): HasMany
     {
         return $this->hasMany(MunicipalAuthority::class);
+    }
+
+    /** @param Builder<Municipality> $query */
+    public function scopePubliclyAvailable(Builder $query): Builder
+    {
+        return $query->where('active', true)
+            ->whereHas('region', fn (Builder $query): Builder => $query->where('active', true))
+            ->whereHas('province', fn (Builder $query): Builder => $query->where('active', true));
     }
 }

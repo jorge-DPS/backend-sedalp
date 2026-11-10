@@ -31,6 +31,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $this->assignPermissionsToRoles();
 
         $this->call(InvestmentPermissionsSeeder::class);
+        $this->call(MunicipalPermissionsSeeder::class);
 
         // Limpiar nuevamente
         app(PermissionRegistrar::class)->forgetCachedPermissions();

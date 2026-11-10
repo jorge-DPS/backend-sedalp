@@ -11,6 +11,7 @@ it('revierte y vuelve a ejecutar las migraciones de inversión sin modificar las
     $tables = ['institutions', 'sectors', 'strategic_axes', 'intervention_types', 'project_statuses', 'projects', 'project_provinces', 'project_municipalities', 'investment_sources', 'project_budgets', 'project_budget_revisions'];
     $sourceMigration = require database_path('migrations/2026_11_04_180318_add_primary_investment_source_id_to_projects_table.php');
     $historyMigration = require database_path('migrations/2026_11_05_202629_add_source_history_to_project_budget_revisions_table.php');
+    $publicationMigration = require database_path('migrations/2026_11_09_201511_add_published_at_to_projects_table.php');
     $schemas = [];
     $migrations = [];
 
@@ -26,6 +27,7 @@ it('revierte y vuelve a ejecutar las migraciones de inversión sin modificar las
         $migrations[] = require $paths[0];
     }
 
+    $publicationMigration->down();
     $historyMigration->down();
     $sourceMigration->down();
 
@@ -45,6 +47,7 @@ it('revierte y vuelve a ejecutar las migraciones de inversión sin modificar las
 
     $sourceMigration->up();
     $historyMigration->up();
+    $publicationMigration->up();
 
     foreach ($tables as $table) {
         expect([

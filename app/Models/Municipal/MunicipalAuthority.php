@@ -31,6 +31,8 @@ class MunicipalAuthority extends Model
 
     protected $attributes = ['is_current' => false, 'is_published' => false];
 
+    protected $hidden = ['photo_path'];
+
     /** @return array<string, string> */
     protected function casts(): array
     {

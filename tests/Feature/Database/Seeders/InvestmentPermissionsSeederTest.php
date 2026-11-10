@@ -16,7 +16,7 @@ it('añade permisos de inversión de forma idempotente y conserva concesiones pr
     $this->seed(InvestmentPermissionsSeeder::class);
     $this->seed(InvestmentPermissionsSeeder::class);
 
-    expect(Permission::where('name', 'like', 'investment.%')->where('guard_name', 'api')->count())->toBe(11);
+    expect(Permission::where('name', 'like', 'investment.%')->where('guard_name', 'api')->count())->toBe(12);
 
     $this->seed(RolesAndPermissionsSeeder::class);
     $this->seed(RolesAndPermissionsSeeder::class);
@@ -34,6 +34,10 @@ it('añade permisos de inversión de forma idempotente y conserva concesiones pr
     }
 
     $technician = Role::findByName(RoleName::TECNICO->value, 'api');
+    foreach ([RoleName::DIRECTOR, RoleName::RESPONSABLE, RoleName::TECNICO, RoleName::COMUNICADOR] as $name) {
+        expect(Role::findByName($name->value, 'api')->hasPermissionTo(PermissionName::INVESTMENT_PROJECTS_PUBLISH->value))
+            ->toBe($name === RoleName::RESPONSABLE);
+    }
     foreach (['investment.projects.create', 'investment.projects.update', 'investment.sources.create', 'investment.sources.update', 'investment.budgets.create', 'investment.budgets.revise'] as $permission) {
         expect($technician->hasPermissionTo($permission))->toBeTrue();
         expect(Role::findByName(RoleName::DIRECTOR->value, 'api')->hasPermissionTo($permission))->toBeFalse();

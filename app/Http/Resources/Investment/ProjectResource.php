@@ -36,6 +36,8 @@ class ProjectResource extends JsonResource
             'funding_source' => $this->funding_source,
             'source_reference' => $this->source_reference,
             'source_year' => $this->source_year,
+            'published_at' => $this->published_at,
+            'is_published' => $this->isPubliclyAvailable(),
             'institution' => new InvestmentCatalogResource($this->whenLoaded('institution')),
             'sector' => new InvestmentCatalogResource($this->whenLoaded('sector')),
             'strategic_axis' => new InvestmentCatalogResource($this->whenLoaded('strategicAxis')),

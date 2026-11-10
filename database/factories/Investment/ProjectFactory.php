@@ -36,6 +36,11 @@ class ProjectFactory extends Factory
         ]);
     }
 
+    public function published(): static
+    {
+        return $this->state(fn (array $attributes): array => ['published_at' => now()]);
+    }
+
     public function withTotalCost(): static
     {
         return $this->state(fn (array $attributes): array => [

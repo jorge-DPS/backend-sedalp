@@ -6,9 +6,13 @@ use App\Http\Controllers\Api\Admin\Investment\InvestmentSourceController;
 use App\Http\Controllers\Api\Admin\Investment\ProjectBudgetController;
 use App\Http\Controllers\Api\Admin\Investment\ProjectBudgetRevisionController;
 use App\Http\Controllers\Api\Admin\Investment\ProjectController;
+use App\Http\Controllers\Api\Admin\Investment\ProjectPublicationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('investment')->name('investment.')->group(function (): void {
+    Route::put('projects/{project}/publication', ProjectPublicationController::class)->whereNumber('project')
+        ->middleware('can:'.PermissionName::INVESTMENT_PROJECTS_PUBLISH->value)->name('projects.publication');
+
     Route::get('catalogs', InvestmentCatalogController::class)
         ->middleware('can:'.PermissionName::INVESTMENT_CATALOGS_VIEW->value)->name('catalogs');
 

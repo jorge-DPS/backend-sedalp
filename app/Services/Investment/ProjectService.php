@@ -101,6 +101,19 @@ class ProjectService
         });
     }
 
+    public function publish(Project $project, bool $published): Project
+    {
+        return DB::transaction(function () use ($project, $published): Project {
+            $project = Project::query()->lockForUpdate()->findOrFail($project->id);
+            $project->published_at = $published ? ($project->isPubliclyAvailable() ? $project->published_at : now()) : null;
+            if (! $project->save()) {
+                throw new \RuntimeException('No se pudo actualizar la publicación del proyecto.');
+            }
+
+            return $project->refresh()->load(self::RELATIONS);
+        }, 3);
+    }
+
     /** @param array<string, mixed> $data */
     private function lockSelections(array $data): void
     {

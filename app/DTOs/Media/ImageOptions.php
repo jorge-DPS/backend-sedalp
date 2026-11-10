@@ -38,10 +38,18 @@ final readonly class ImageOptions
         public int $jpegQuality = 82,
 
         public bool $jpegProgressive = true,
+
+        public ?string $disk = null,
+
+        public string $visibility = 'public',
     ) {
         $this->directory = $this->normalizeDirectory(
             $directory
         );
+
+        if (($disk !== null && trim($disk) === '') || ! in_array($visibility, ['public', 'private'], true)) {
+            throw new InvalidArgumentException('Disco o visibilidad de imagen no válidos.');
+        }
 
         $this->validateFormats($formats);
 

@@ -4,11 +4,24 @@ namespace App\Enums\Auth;
 
 enum PermissionName: string
 {
+    case MUNICIPAL_POAS_VIEW = 'municipal.poas.view';
+    case MUNICIPAL_POAS_CREATE = 'municipal.poas.create';
+    case MUNICIPAL_POAS_UPDATE = 'municipal.poas.update';
+    case MUNICIPAL_DOCUMENTS_VIEW = 'municipal.documents.view';
+    case MUNICIPAL_DOCUMENTS_UPLOAD = 'municipal.documents.upload';
+    case MUNICIPAL_DOCUMENTS_PUBLISH = 'municipal.documents.publish';
+    case MUNICIPAL_AUTHORITIES_VIEW = 'municipal.authorities.view';
+    case MUNICIPAL_AUTHORITIES_CREATE = 'municipal.authorities.create';
+    case MUNICIPAL_AUTHORITIES_UPDATE = 'municipal.authorities.update';
+    case MUNICIPAL_AUTHORITIES_PUBLISH = 'municipal.authorities.publish';
+    case MUNICIPAL_AUTHORITY_PHOTOS_UPDATE = 'municipal.authorities.photos.update';
+
     case INVESTMENT_CATALOGS_VIEW = 'investment.catalogs.view';
     case INVESTMENT_PROJECTS_VIEW = 'investment.projects.view';
     case INVESTMENT_PROJECTS_CREATE = 'investment.projects.create';
     case INVESTMENT_PROJECTS_UPDATE = 'investment.projects.update';
     case INVESTMENT_PROJECTS_DELETE = 'investment.projects.delete';
+    case INVESTMENT_PROJECTS_PUBLISH = 'investment.projects.publish';
     case INVESTMENT_SOURCES_VIEW = 'investment.sources.view';
     case INVESTMENT_SOURCES_CREATE = 'investment.sources.create';
     case INVESTMENT_SOURCES_UPDATE = 'investment.sources.update';

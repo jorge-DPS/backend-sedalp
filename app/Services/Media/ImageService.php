@@ -59,11 +59,11 @@ class ImageService
                 );
 
                 $stored = Storage::disk(
-                    $this->disk()
+                    $options->disk ?? $this->disk()
                 )->put(
                     $path,
                     $contents,
-                    'public'
+                    $options->visibility
                 );
 
                 if (! $stored) {
@@ -87,6 +87,7 @@ class ImageService
                 $this->delete(
                     filename: $filename,
                     directory: $options->directory,
+                    disk: $options->disk,
                 );
             } catch (Throwable $cleanupException) {
                 report($cleanupException);
@@ -95,6 +96,7 @@ class ImageService
                     CleanupImageFiles::dispatch(
                         filename: $filename,
                         directory: $options->directory,
+                        disk: $options->disk,
                     );
                 } catch (Throwable $dispatchException) {
                     report($dispatchException);
@@ -112,7 +114,8 @@ class ImageService
      */
     public function delete(
         string $filename,
-        string $directory
+        string $directory,
+        ?string $disk = null,
     ): void {
         $directory = $this->normalizeDirectory(
             $directory
@@ -134,7 +137,7 @@ class ImageService
         );
 
         $deleted = Storage::disk(
-            $this->disk()
+            $disk ?? $this->disk()
         )->delete($paths);
 
         if (! $deleted) {

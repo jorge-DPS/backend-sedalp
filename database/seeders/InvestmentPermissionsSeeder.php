@@ -41,6 +41,8 @@ class InvestmentPermissionsSeeder extends Seeder
             PermissionName::INVESTMENT_BUDGETS_REVISE->value,
         ]);
 
+        Role::findOrCreate(RoleName::RESPONSABLE->value, 'api')->givePermissionTo(PermissionName::INVESTMENT_PROJECTS_PUBLISH->value);
+
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

@@ -51,6 +51,8 @@ class StoreProjectRequest extends FormRequest
             'municipality_ids' => ['sometimes', 'array', 'list', 'max:1000'],
             'municipality_ids.*' => ['required', 'integer', 'distinct', Rule::exists(Municipality::class, 'id')->withoutTrashed()->where('active', true)],
             'budgets' => ['prohibited'],
+            'published_at' => ['missing'],
+            'is_published' => ['missing'],
         ];
     }
 
