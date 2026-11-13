@@ -15,6 +15,7 @@ class MunicipalAuthorityResource extends JsonResource
         return [
             'id' => $this->id,
             'municipality_id' => $this->municipality_id,
+            'municipal_term_id' => $this->municipal_term_id,
             'full_name' => $this->full_name,
             'position_title' => $this->position_title,
             'is_current' => $this->is_current,

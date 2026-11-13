@@ -37,7 +37,7 @@ it('rechaza duplicados del mismo municipio y permite la misma gestión en otro m
 
 it('conserva los documentos y rechaza cambios de identidad incluso con valores nulos', function (string $field): void {
     $poa = MunicipalPoa::factory()->for($this->municipality)->create();
-    $document = MunicipalPoaDocument::factory()->for($poa)->create();
+    $document = MunicipalPoaDocument::factory()->forPoa($poa)->create();
     $before = $document->fresh()->getAttributes();
     $this->patchJson($this->url."/{$poa->id}", [$field => null])->assertUnprocessable()->assertJsonValidationErrors($field);
     $this->patchJson($this->url."/{$poa->id}", ['title' => 'Metadatos actualizados'])->assertOk()->assertJsonPath('data.documents_count', 1);

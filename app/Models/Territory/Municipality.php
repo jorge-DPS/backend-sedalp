@@ -5,6 +5,7 @@ namespace App\Models\Territory;
 use App\Models\Investment\Project;
 use App\Models\Municipal\MunicipalAuthority;
 use App\Models\Municipal\MunicipalPoa;
+use App\Models\Municipal\MunicipalTerm;
 use Database\Factories\Territory\MunicipalityFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -73,6 +74,11 @@ class Municipality extends Model
     public function municipalAuthorities(): HasMany
     {
         return $this->hasMany(MunicipalAuthority::class);
+    }
+
+    public function municipalTerms(): HasMany
+    {
+        return $this->hasMany(MunicipalTerm::class);
     }
 
     /** @param Builder<Municipality> $query */

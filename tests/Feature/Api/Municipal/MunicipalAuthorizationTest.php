@@ -12,7 +12,7 @@ beforeEach(function (): void {
     $this->seed(RolesAndPermissionsSeeder::class);
     $this->municipality = Municipality::factory()->create();
     $this->poa = MunicipalPoa::factory()->for($this->municipality)->create();
-    $this->document = MunicipalPoaDocument::factory()->for($this->poa)->create();
+    $this->document = MunicipalPoaDocument::factory()->forPoa($this->poa)->create();
     $this->authority = MunicipalAuthority::factory()->for($this->municipality)->create();
 });
 

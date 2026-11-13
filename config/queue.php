@@ -31,6 +31,15 @@ return [
 
     'connections' => [
 
+        'municipal_uploads' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'municipal-uploads',
+            'retry_after' => (int) env('MUNICIPAL_POA_QUEUE_RETRY_AFTER', 7200),
+            'after_commit' => true,
+        ],
+
         'sync' => [
             'driver' => 'sync',
         ],

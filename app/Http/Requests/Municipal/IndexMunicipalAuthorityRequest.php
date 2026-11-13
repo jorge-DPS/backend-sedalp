@@ -4,6 +4,7 @@ namespace App\Http\Requests\Municipal;
 
 use App\Enums\Auth\PermissionName;
 use App\Enums\Municipal\MunicipalAuthorityRole;
+use App\Models\Municipal\MunicipalTerm;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,6 +19,7 @@ class IndexMunicipalAuthorityRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'municipal_term_id' => ['sometimes', 'integer', Rule::exists(MunicipalTerm::class, 'id')->where('municipality_id', $this->route('municipality')?->id)],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'between:1,100'],
             'role' => ['sometimes', Rule::enum(MunicipalAuthorityRole::class)],

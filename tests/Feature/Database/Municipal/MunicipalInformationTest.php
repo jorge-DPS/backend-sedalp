@@ -5,6 +5,7 @@ use App\Enums\Municipal\PoaDocumentType;
 use App\Models\Municipal\MunicipalAuthority;
 use App\Models\Municipal\MunicipalPoa;
 use App\Models\Municipal\MunicipalPoaDocument;
+use App\Models\Municipal\MunicipalPoaVersion;
 use App\Models\Territory\Municipality;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -18,10 +19,8 @@ it('mantiene POA de distintas gestiones con sus documentos iniciales y reformula
     $municipality = Municipality::factory()->create();
     $poa = MunicipalPoa::factory()->for($municipality)->create(['fiscal_year' => 2026]);
     $next = MunicipalPoa::factory()->for($municipality)->create(['fiscal_year' => 2027]);
-    $initial = MunicipalPoaDocument::factory()->for($poa)->create();
-    $reformulated = MunicipalPoaDocument::factory()->for($poa)->published()->create([
-        'version_number' => 2, 'document_type' => PoaDocumentType::REFORMULATED,
-    ]);
+    $initial = MunicipalPoaDocument::factory()->forPoa($poa)->create();
+    $reformulated = MunicipalPoaDocument::factory()->forPoa($poa, 2)->published()->create();
 
     expect($municipality->municipalPoas()->count())->toBe(2)
         ->and($poa->municipality->is($municipality))->toBeTrue()
@@ -44,17 +43,15 @@ it('impide duplicar el POA de un municipio y gestión', function (): void {
 it('impide números de versión repetidos y dos documentos actuales', function (bool $duplicateVersion): void {
     $initial = MunicipalPoaDocument::factory()->current()->create();
 
-    expect(fn () => DB::transaction(fn () => MunicipalPoaDocument::factory()->current()->create([
-        'municipal_poa_id' => $initial->municipal_poa_id,
-        'version_number' => $duplicateVersion ? 1 : 2,
-        'document_type' => $duplicateVersion ? PoaDocumentType::INITIAL : PoaDocumentType::REFORMULATED,
-    ])))->toThrow(QueryException::class);
+    expect(fn () => DB::transaction(fn () => MunicipalPoaDocument::factory()->forPoa($initial->municipalPoa, $duplicateVersion ? 1 : 2)->current()->create()))->toThrow(QueryException::class);
 })->with([false, true]);
 
 it('rechaza versiones tipos tamaños MIME y publicación incoherentes', function (array $changes): void {
-    $attributes = MunicipalPoaDocument::factory()->make()->getAttributes();
+    $isVersion = array_intersect(array_keys($changes), ['version_number', 'document_type', 'published_at', 'is_current']) !== [];
+    $attributes = $isVersion ? MunicipalPoaVersion::factory()->make()->getAttributes() : MunicipalPoaDocument::factory()->make()->getAttributes();
+    $table = $isVersion ? 'municipal_poa_versions' : 'municipal_poa_documents';
 
-    expect(fn () => DB::transaction(fn () => DB::table('municipal_poa_documents')->insert([...$attributes, ...$changes])))
+    expect(fn () => DB::transaction(fn () => DB::table($table)->insert([...$attributes, ...$changes])))
         ->toThrow(QueryException::class);
 })->with([
     [['version_number' => 0]],
@@ -71,7 +68,8 @@ it('rechaza versiones tipos tamaños MIME y publicación incoherentes', function
 it('solo considera disponibles los PDFs publicados y oculta su ruta privada al serializar', function (): void {
     $draft = MunicipalPoaDocument::factory()->create();
     $published = MunicipalPoaDocument::factory()->published()->create();
-    $future = MunicipalPoaDocument::factory()->create(['published_at' => now()->addDay()]);
+    $future = MunicipalPoaDocument::factory()->create();
+    $future->version->update(['published_at' => now()->addDay()]);
 
     expect($draft->isPubliclyAvailable())->toBeFalse()
         ->and($future->isPubliclyAvailable())->toBeFalse()
@@ -135,7 +133,7 @@ it('protege las claves foráneas municipales y la eliminación de padres', funct
         ->toThrow(QueryException::class);
 })->with([
     [MunicipalPoa::class, 'municipality_id', 'municipality'],
-    [MunicipalPoaDocument::class, 'municipal_poa_id', 'municipalPoa'],
+    [MunicipalPoaDocument::class, 'municipal_poa_version_id', 'version'],
     [MunicipalAuthority::class, 'municipality_id', 'municipality'],
 ]);
 
@@ -149,6 +147,12 @@ it('revierte las tablas municipales y las recrea sin alterar los municipios', fu
         $migrations[] = require $paths[0];
     }
 
+    $normalization = require database_path('migrations/2026_11_13_160924_normalize_municipal_poa_versions.php');
+    $terms = require database_path('migrations/2026_11_13_160925_create_municipal_terms_table.php');
+    $uploads = require database_path('migrations/2026_11_13_160926_create_municipal_poa_uploads_table.php');
+    $uploads->down();
+    $terms->down();
+    $normalization->down();
     foreach (array_reverse($migrations) as $migration) {
         $migration->down();
     }
@@ -163,6 +167,9 @@ it('revierte las tablas municipales y las recrea sin alterar los municipios', fu
         $migration->up();
     }
 
+    $normalization->up();
+    $terms->up();
+    $uploads->up();
     expect(MunicipalPoa::factory()->for($municipality)->create()->municipality->is($municipality))->toBeTrue();
 });
 
@@ -174,6 +181,6 @@ it('impide insertar registros municipales con padres inexistentes', function (st
         ->toThrow(QueryException::class);
 })->with([
     [MunicipalPoa::class, 'municipality_id'],
-    [MunicipalPoaDocument::class, 'municipal_poa_id'],
+    [MunicipalPoaDocument::class, 'municipal_poa_version_id'],
     [MunicipalAuthority::class, 'municipality_id'],
 ]);

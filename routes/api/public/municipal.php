@@ -3,10 +3,23 @@
 use App\Http\Controllers\Api\Public\Municipal\MunicipalAuthorityController;
 use App\Http\Controllers\Api\Public\Municipal\MunicipalPoaController;
 use App\Http\Controllers\Api\Public\Municipal\MunicipalPoaDocumentController;
+use App\Http\Controllers\Api\Public\Municipal\MunicipalPoaVersionController;
+use App\Http\Controllers\Api\Public\Municipal\MunicipalTermController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('public/municipalities/{municipality}')->whereNumber('municipality')->middleware('throttle:public-api')
     ->scopeBindings()->name('public.municipal.')->group(function (): void {
+        Route::get('terms', [MunicipalTermController::class, 'index'])->name('terms.index');
+        Route::get('terms/{municipalTerm}', [MunicipalTermController::class, 'show'])->whereNumber('municipalTerm')->name('terms.show');
+        Route::get('terms/{municipalTerm}/authorities', [MunicipalTermController::class, 'authorities'])->whereNumber('municipalTerm')->name('terms.authorities.index');
+        Route::get('terms/{municipalTerm}/authorities/{municipalAuthority}', [MunicipalTermController::class, 'showAuthority'])->whereNumber('municipalTerm')->whereNumber('municipalAuthority')->name('terms.authorities.show');
+        Route::prefix('poas/{municipalPoa}/versions')->whereNumber('municipalPoa')->name('versions.')->group(function (): void {
+            Route::get('/', [MunicipalPoaVersionController::class, 'index'])->name('index');
+            Route::get('{version}', [MunicipalPoaVersionController::class, 'show'])->whereNumber('version')->name('show');
+            Route::get('{version}/documents', [MunicipalPoaDocumentController::class, 'versionIndex'])->whereNumber('version')->name('documents.index');
+            Route::get('{version}/documents/{document}', [MunicipalPoaDocumentController::class, 'versionShow'])->whereNumber('version')->whereNumber('document')->name('documents.show');
+            Route::get('{version}/documents/{document}/file', [MunicipalPoaDocumentController::class, 'versionFile'])->whereNumber('version')->whereNumber('document')->name('documents.file');
+        });
         Route::get('poas', [MunicipalPoaController::class, 'index'])->name('poas.index');
         Route::get('poas/{municipalPoa}', [MunicipalPoaController::class, 'show'])->whereNumber('municipalPoa')->name('poas.show');
         Route::prefix('poas/{municipalPoa}/documents')->whereNumber('municipalPoa')->name('documents.')->group(function (): void {

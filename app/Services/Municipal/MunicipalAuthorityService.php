@@ -4,6 +4,7 @@ namespace App\Services\Municipal;
 
 use App\Enums\Municipal\MunicipalAuthorityRole;
 use App\Models\Municipal\MunicipalAuthority;
+use App\Models\Municipal\MunicipalTerm;
 use App\Models\Territory\Municipality;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,9 @@ class MunicipalAuthorityService
     {
         return DB::transaction(function () use ($municipality, $data): MunicipalAuthority {
             $municipality = $this->lockMunicipality($municipality->id);
+            if (empty($data['municipal_term_id'])) {
+                throw ValidationException::withMessages(['municipal_term_id' => 'Seleccione una gestión municipal válida.']);
+            }
             $authority = $municipality->municipalAuthorities()->make($data);
             $this->validateState($authority);
 
@@ -94,6 +98,10 @@ class MunicipalAuthorityService
 
     private function validateState(MunicipalAuthority $authority): void
     {
+        if ($authority->municipal_term_id !== null && ! MunicipalTerm::query()->where('municipality_id', $authority->municipality_id)
+            ->whereKey($authority->municipal_term_id)->sharedLock()->exists()) {
+            throw ValidationException::withMessages(['municipal_term_id' => 'La gestión debe pertenecer al mismo municipio.']);
+        }
         if ($authority->term_start !== null && $authority->term_end !== null && $authority->term_end->lt($authority->term_start)) {
             throw ValidationException::withMessages(['term_end' => 'El fin del mandato no puede preceder a su inicio.']);
         }

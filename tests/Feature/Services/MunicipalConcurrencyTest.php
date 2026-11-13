@@ -2,8 +2,10 @@
 
 use App\Models\Municipal\MunicipalAuthority;
 use App\Models\Municipal\MunicipalPoa;
+use App\Models\Municipal\MunicipalTerm;
 use App\Models\Territory\Municipality;
 use App\Services\Municipal\MunicipalPoaDocumentService;
+use App\Services\Municipal\MunicipalPoaVersionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -31,10 +33,15 @@ it('serializa operaciones municipales simultáneas sin perder versiones ni dupli
         Storage::forgetDisk('local');
         DB::setDefaultConnection('municipal_concurrency');
         Schema::clearResolvedInstance('db.schema');
-        foreach (['regions', 'provinces', 'municipalities', 'municipal_poas', 'municipal_poa_documents', 'municipal_authorities'] as $table) {
+        foreach (['positions', 'professions', 'organizational_units', 'staff_members', 'users', 'regions', 'provinces', 'municipalities', 'municipal_poas', 'municipal_poa_documents', 'municipal_authorities'] as $table) {
             $migrationPaths = glob(database_path('migrations/*_create_'.$table.'_table.php'));
             $migration = require $migrationPaths[0];
             $migration->up();
+        }
+
+        foreach (['2026_11_13_160924_normalize_municipal_poa_versions.php', '2026_11_13_160925_create_municipal_terms_table.php', '2026_11_13_160926_create_municipal_poa_uploads_table.php'] as $migrationPath) {
+            $migration = require database_path('migrations/'.$migrationPath);
+            DB::transaction(fn () => $migration->up());
         }
 
         $municipality = Municipality::factory()->create();
@@ -42,21 +49,26 @@ it('serializa operaciones municipales simultáneas sin perder versiones ni dupli
         $payloads = [];
 
         if (in_array($operation, ['register', 'publish'], true)) {
+            $version = app(MunicipalPoaVersionService::class)->create($poa);
             foreach ([0, 1] as $index) {
                 $path = 'municipal/poas/'.$poa->id.'/'.Str::uuid().'.pdf';
                 $paths[] = $path;
                 Storage::disk('local')->put($path, "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF", 'private');
                 if ($operation === 'publish') {
-                    $document = app(MunicipalPoaDocumentService::class)->register($poa, ['title' => 'Documento '.$index, 'pdf_path' => $path]);
-                    $payloads[] = ['document_id' => $document->id];
+                    $version = $index === 0 ? $version : app(MunicipalPoaVersionService::class)->create($poa);
+                    $document = app(MunicipalPoaDocumentService::class)->register($version, ['title' => 'Documento '.$index, 'pdf_path' => $path]);
+                    $payloads[] = ['version_id' => $version->id];
                 } else {
-                    $payloads[] = ['title' => 'Documento '.$index, 'pdf_path' => $path];
+                    $payloads[] = ['title' => 'Documento '.$index, 'pdf_path' => $path, 'version_id' => $version->id];
                 }
             }
+        } elseif ($operation === 'create_version') {
+            $payloads = [[], []];
         } elseif ($operation === 'mayor') {
+            $term = MunicipalTerm::factory()->for($municipality)->create();
             $payloads = [
-                ['full_name' => 'Alcalde A', 'role' => 'mayor', 'is_current' => true],
-                ['full_name' => 'Alcalde B', 'role' => 'mayor', 'is_current' => true],
+                ['full_name' => 'Alcalde A', 'role' => 'mayor', 'is_current' => true, 'municipal_term_id' => $term->id],
+                ['full_name' => 'Alcalde B', 'role' => 'mayor', 'is_current' => true, 'municipal_term_id' => $term->id],
             ];
         } else {
             $previous = MunicipalAuthority::factory()->for($municipality)->mayor()->current()->create(['term_start' => '2020-01-01']);
@@ -91,10 +103,13 @@ $payload = json_decode($argv[6], true, 512, JSON_THROW_ON_ERROR);
 try {
     switch ($argv[4]) {
         case 'register':
-            app(App\Services\Municipal\MunicipalPoaDocumentService::class)->register(App\Models\Municipal\MunicipalPoa::findOrFail((int) $argv[5]), $payload);
+            app(App\Services\Municipal\MunicipalPoaDocumentService::class)->register(App\Models\Municipal\MunicipalPoaVersion::findOrFail($payload['version_id']), Illuminate\Support\Arr::except($payload, ['version_id']));
             break;
         case 'publish':
-            app(App\Services\Municipal\MunicipalPoaDocumentService::class)->publish(App\Models\Municipal\MunicipalPoaDocument::findOrFail($payload['document_id']));
+            app(App\Services\Municipal\MunicipalPoaVersionService::class)->publish(App\Models\Municipal\MunicipalPoaVersion::findOrFail($payload['version_id']));
+            break;
+        case 'create_version':
+            app(App\Services\Municipal\MunicipalPoaVersionService::class)->create(App\Models\Municipal\MunicipalPoa::findOrFail((int) $argv[5]));
             break;
         case 'mayor':
             app(App\Services\Municipal\MunicipalAuthorityService::class)->create(App\Models\Territory\Municipality::findOrFail((int) $argv[5]), $payload);
@@ -109,14 +124,14 @@ try {
 }
 PHP;
         $setup->beginTransaction();
-        $setup->table(in_array($operation, ['register', 'publish'], true) ? 'municipal_poas' : 'municipalities')
-            ->where('id', in_array($operation, ['register', 'publish'], true) ? $poa->id : $municipality->id)->lockForUpdate()->first();
+        $setup->table(in_array($operation, ['register', 'publish', 'create_version'], true) ? 'municipal_poas' : 'municipalities')
+            ->where('id', in_array($operation, ['register', 'publish', 'create_version'], true) ? $poa->id : $municipality->id)->lockForUpdate()->first();
         $names = [];
         foreach ($payloads as $index => $payload) {
             $names[] = $schema.'_'.$index;
             $process = new Process([
                 PHP_BINARY, '-r', $worker, $schema, $root, $names[$index], $operation,
-                (string) (in_array($operation, ['register', 'publish'], true) ? $poa->id : $municipality->id),
+                (string) (in_array($operation, ['register', 'publish', 'create_version'], true) ? $poa->id : $municipality->id),
                 json_encode($payload, JSON_THROW_ON_ERROR),
             ], base_path(), ['APP_ENV' => 'testing', 'PAO_DISABLE' => 'true']);
             $process->setTimeout(30);
@@ -144,10 +159,11 @@ PHP;
             $results[] = $process->getOutput();
         }
 
-        if (in_array($operation, ['register', 'publish'], true)) {
+        if (in_array($operation, ['register', 'publish', 'create_version'], true)) {
             expect($results)->toBe(['success', 'success'])
-                ->and($setup->table('municipal_poa_documents')->orderBy('version_number')->pluck('version_number')->all())->toBe([1, 2])
-                ->and($setup->table('municipal_poa_documents')->where('is_current', true)->count())->toBe($operation === 'publish' ? 1 : 0);
+                ->and($setup->table('municipal_poa_versions')->orderBy('version_number')->pluck('version_number')->all())->toBe($operation === 'register' ? [1] : [1, 2])
+                ->and($setup->table('municipal_poa_documents')->count())->toBe($operation === 'create_version' ? 0 : 2)
+                ->and($setup->table('municipal_poa_versions')->where('is_current', true)->count())->toBe($operation === 'publish' ? 1 : 0);
             foreach ($paths as $path) {
                 Storage::disk('local')->assertExists($path);
             }
@@ -184,4 +200,4 @@ PHP;
         }
         DB::purge('municipal_concurrency');
     }
-})->with(['register', 'publish', 'mayor', 'transition']);
+})->with(['register', 'publish', 'create_version', 'mayor', 'transition']);

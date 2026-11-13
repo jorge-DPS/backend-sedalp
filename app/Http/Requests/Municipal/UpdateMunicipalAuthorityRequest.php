@@ -17,6 +17,7 @@ class UpdateMunicipalAuthorityRequest extends StoreMunicipalAuthorityRequest
         $rules = parent::rules();
         array_unshift($rules['full_name'], 'sometimes');
         $rules['role'] = ['missing'];
+        array_unshift($rules['municipal_term_id'], 'sometimes');
 
         return $rules;
     }

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class MunicipalPoa extends Model
 {
@@ -35,9 +36,13 @@ class MunicipalPoa extends Model
         return $this->belongsTo(Municipality::class)->withTrashed();
     }
 
-    /** @return HasMany<MunicipalPoaDocument, $this> */
-    public function documents(): HasMany
+    public function versions(): HasMany
     {
-        return $this->hasMany(MunicipalPoaDocument::class);
+        return $this->hasMany(MunicipalPoaVersion::class);
+    }
+
+    public function documents(): HasManyThrough
+    {
+        return $this->hasManyThrough(MunicipalPoaDocument::class, MunicipalPoaVersion::class);
     }
 }

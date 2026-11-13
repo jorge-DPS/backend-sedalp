@@ -21,11 +21,7 @@ class MunicipalAuthorityController extends Controller
     {
         $filters = $request->validated();
         $query = $this->portal->authorities($municipality);
-        foreach (['role', 'is_current'] as $field) {
-            if (array_key_exists($field, $filters)) {
-                $query->where($field, $filters[$field]);
-            }
-        }
+        $query->filtered($filters);
 
         return MunicipalAuthorityResource::collection($query->orderByDesc('is_current')->orderBy('full_name')->orderBy('id')
             ->paginate((int) ($filters['per_page'] ?? 15))->withQueryString())->response()->header('Cache-Control', 'no-store');

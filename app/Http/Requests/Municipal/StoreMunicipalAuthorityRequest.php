@@ -4,6 +4,7 @@ namespace App\Http\Requests\Municipal;
 
 use App\Enums\Auth\PermissionName;
 use App\Enums\Municipal\MunicipalAuthorityRole;
+use App\Models\Municipal\MunicipalTerm;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,6 +19,8 @@ class StoreMunicipalAuthorityRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'municipal_term_id' => ['required', 'integer', Rule::exists(MunicipalTerm::class, 'id')->where('municipality_id', $this->route('municipality')?->id),
+                Rule::when($this->route('municipalTerm') !== null, [Rule::in([$this->route('municipalTerm')?->id])])],
             'full_name' => ['required', 'string', 'max:200'],
             'role' => ['required', Rule::enum(MunicipalAuthorityRole::class)],
             'position_title' => ['sometimes', 'nullable', 'string', 'max:150'],
@@ -31,5 +34,12 @@ class StoreMunicipalAuthorityRequest extends FormRequest
             'photo' => ['missing'],
             'is_published' => ['missing'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->route('municipalTerm') !== null && ! $this->exists('municipal_term_id')) {
+            $this->merge(['municipal_term_id' => $this->route('municipalTerm')->id]);
+        }
     }
 }

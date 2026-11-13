@@ -82,14 +82,13 @@ it('sirve fotografías autorizadas con validación del almacenamiento privado', 
 
 it('consulta PDF inicial reformulado e histórico publicados y oculta borradores futuros', function (): void {
     $poa = MunicipalPoa::factory()->for($this->municipality)->create(['fiscal_year' => 2027, 'notes' => 'Interno']);
-    $old = MunicipalPoaDocument::factory()->for($poa)->published()->create(['notes' => 'Interno']);
-    $current = MunicipalPoaDocument::factory()->for($poa)->current()->create(['version_number' => 2, 'document_type' => 'reformulated']);
-    $draft = MunicipalPoaDocument::factory()->for($poa)->create(['version_number' => 3, 'document_type' => 'reformulated']);
-    $future = MunicipalPoaDocument::factory()->for($poa)->create([
-        'version_number' => 4, 'document_type' => 'reformulated', 'published_at' => now()->addDay(),
-    ]);
+    $old = MunicipalPoaDocument::factory()->forPoa($poa)->published()->create(['notes' => 'Interno']);
+    $current = MunicipalPoaDocument::factory()->forPoa($poa, 2)->current()->create();
+    $draft = MunicipalPoaDocument::factory()->forPoa($poa, 3)->create();
+    $future = MunicipalPoaDocument::factory()->forPoa($poa, 4)->create();
+    $future->version->update(['published_at' => now()->addDay()]);
     $privatePoa = MunicipalPoa::factory()->for($this->municipality)->create(['fiscal_year' => 2028]);
-    MunicipalPoaDocument::factory()->for($privatePoa)->create();
+    MunicipalPoaDocument::factory()->forPoa($privatePoa)->create();
     $url = $this->url.'/poas/'.$poa->id.'/documents';
     $this->getJson($this->url.'/poas?fiscal_year=2027')->assertOk()->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.published_documents_count', 2)->assertJsonMissingPath('data.0.notes');
@@ -97,7 +96,7 @@ it('consulta PDF inicial reformulado e histórico publicados y oculta borradores
     $this->getJson($url)->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('data.0.id', $old->id)
         ->assertJsonPath('data.0.download_url', $url.'/'.$old->id.'/file')
         ->assertJsonMissingPath('data.0.pdf_path')->assertJsonMissingPath('data.0.notes')
-        ->assertJsonMissingPath('data.0.original_filename');
+        ->assertJsonPath('data.0.original_filename', null);
     $this->getJson($url.'?is_current=true&document_type=reformulated')->assertOk()->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.id', $current->id);
     foreach ([$old, $current] as $document) {
@@ -116,7 +115,7 @@ it('consulta PDF inicial reformulado e histórico publicados y oculta borradores
 
 it('impide cruces de municipios POA y documentos aun cuando todos estén publicados', function (): void {
     $poa = MunicipalPoa::factory()->for($this->municipality)->create();
-    $document = MunicipalPoaDocument::factory()->for($poa)->published()->create();
+    $document = MunicipalPoaDocument::factory()->forPoa($poa)->published()->create();
     $foreign = MunicipalPoaDocument::factory()->published()->create();
     $otherMunicipality = Municipality::factory()->create();
     $this->getJson('/api/public/municipalities/'.$otherMunicipality->id.'/poas/'.$poa->id)->assertNotFound();

@@ -12,8 +12,9 @@ class MunicipalPoaDocumentResource extends JsonResource
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        return [
+        $fields = [
             'id' => $this->id,
+            'municipal_poa_version_id' => $this->municipal_poa_version_id,
             'municipal_poa_id' => $this->municipal_poa_id,
             'version_number' => $this->version_number,
             'title' => $this->title,
@@ -30,5 +31,10 @@ class MunicipalPoaDocumentResource extends JsonResource
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
+        if ($request->route('version') !== null) {
+            $fields = array_diff_key($fields, array_flip(['municipal_poa_id', 'version_number', 'document_type', 'published_at', 'is_current', 'is_published']));
+        }
+
+        return $fields;
     }
 }

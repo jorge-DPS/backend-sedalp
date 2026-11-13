@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Municipal\MunicipalAuthority;
+use App\Models\Municipal\MunicipalTerm;
 use App\Models\Territory\Municipality;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -13,14 +14,15 @@ beforeEach(function (): void {
     $this->actingAs($this->user, 'api');
     $this->municipality = Municipality::factory()->create();
     $this->url = "/api/admin/municipalities/{$this->municipality->id}/authorities";
+    $this->term = MunicipalTerm::factory()->for($this->municipality)->create();
 });
 
 it('registra alcalde y varios concejales actuales sin publicarlos automáticamente', function (): void {
-    $id = $this->postJson($this->url, ['full_name' => 'Alcalde de prueba', 'role' => 'mayor', 'is_current' => true])
+    $id = $this->postJson($this->url, ['municipal_term_id' => $this->term->id, 'full_name' => 'Alcalde de prueba', 'role' => 'mayor', 'is_current' => true])
         ->assertCreated()->assertJsonPath('data.is_current', true)->assertJsonPath('data.is_published', false)
         ->assertJsonMissingPath('data.photo_path')->json('data.id');
     foreach (['Concejal A', 'Concejal B'] as $name) {
-        $this->postJson($this->url, ['full_name' => $name, 'role' => 'council_member', 'is_current' => true])->assertCreated();
+        $this->postJson($this->url, ['municipal_term_id' => $this->term->id, 'full_name' => $name, 'role' => 'council_member', 'is_current' => true])->assertCreated();
     }
     $this->getJson($this->url.'?role=council_member&is_current=true&is_published=false&per_page=1')
         ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 2);
@@ -33,7 +35,7 @@ it('registra alcalde y varios concejales actuales sin publicarlos automáticamen
 
 it('rechaza un segundo alcalde actual sin eliminar al primero', function (): void {
     $previous = MunicipalAuthority::factory()->for($this->municipality)->mayor()->current()->create();
-    $this->postJson($this->url, ['full_name' => 'Segundo alcalde', 'role' => 'mayor', 'is_current' => true])
+    $this->postJson($this->url, ['municipal_term_id' => $this->term->id, 'full_name' => 'Segundo alcalde', 'role' => 'mayor', 'is_current' => true])
         ->assertUnprocessable()->assertJsonValidationErrors('is_current');
     $candidate = MunicipalAuthority::factory()->for($this->municipality)->mayor()->create();
     $this->patchJson($this->url."/{$candidate->id}", ['is_current' => true])->assertUnprocessable();
@@ -41,7 +43,7 @@ it('rechaza un segundo alcalde actual sin eliminar al primero', function (): voi
 });
 
 it('valida fechas roles y atributos del servidor', function (array $changes, string $field): void {
-    $this->postJson($this->url, ['full_name' => 'Autoridad', 'role' => 'mayor', ...$changes])
+    $this->postJson($this->url, ['municipal_term_id' => $this->term->id, 'full_name' => 'Autoridad', 'role' => 'mayor', ...$changes])
         ->assertUnprocessable()->assertJsonValidationErrors($field);
     expect($this->municipality->municipalAuthorities()->exists())->toBeFalse();
 })->with([
@@ -126,7 +128,7 @@ it('valida los filtros y rechaza escritura en municipios inactivos o eliminados'
     $this->getJson($this->url.'?role=unknown')->assertUnprocessable();
     $this->getJson($this->url.'?is_current=invalid')->assertUnprocessable();
     $this->municipality->update(['active' => false]);
-    $this->postJson($this->url, ['full_name' => 'Autoridad', 'role' => 'mayor'])->assertUnprocessable();
+    $this->postJson($this->url, ['municipal_term_id' => $this->term->id, 'full_name' => 'Autoridad', 'role' => 'mayor'])->assertUnprocessable();
     $this->municipality->delete();
     $this->getJson($this->url)->assertNotFound();
 });

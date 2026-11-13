@@ -3,8 +3,10 @@
 use App\Jobs\Municipal\CleanupMunicipalUpload;
 use App\Models\Municipal\MunicipalPoa;
 use App\Models\Municipal\MunicipalPoaDocument;
+use App\Models\Municipal\MunicipalPoaVersion;
 use App\Models\Territory\Municipality;
 use App\Models\User;
+use App\Services\Municipal\MunicipalPoaVersionService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
@@ -22,18 +24,20 @@ beforeEach(function (): void {
     $this->actingAs($this->user, 'api');
     $this->municipality = Municipality::factory()->create();
     $this->poa = MunicipalPoa::factory()->for($this->municipality)->create();
+    $this->version = app(MunicipalPoaVersionService::class)->create($this->poa);
     $this->url = "/api/admin/municipalities/{$this->municipality->id}/poas/{$this->poa->id}/documents";
     $this->pdf = fn (string $name = 'document.pdf'): UploadedFile => UploadedFile::fake()->createWithContent($name, "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF");
 });
 
 it('carga PDF inicial y reformulados en privado con versiones correlativas y archivos propios', function (): void {
-    $id = $this->postJson($this->url, ['title' => 'Inicial consolidado', 'pdf' => ($this->pdf)()])
+    $id = $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Inicial consolidado', 'pdf' => ($this->pdf)()])
         ->assertCreated()->assertJsonPath('data.version_number', 1)->assertJsonPath('data.document_type', 'initial')
         ->assertJsonPath('data.is_current', false)->assertJsonPath('data.is_published', false)
         ->assertJsonMissingPath('data.pdf_path')->assertJsonMissingPath('data.url')->json('data.id');
     $initial = MunicipalPoaDocument::findOrFail($id);
     $bytes = Storage::disk('local')->get($initial->pdf_path);
-    $secondId = $this->postJson($this->url, ['title' => 'Reformulado', 'pdf' => ($this->pdf)('document.pdf')])
+    $this->version = app(MunicipalPoaVersionService::class)->create($this->poa);
+    $secondId = $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Reformulado', 'pdf' => ($this->pdf)('document.pdf')])
         ->assertCreated()->assertJsonPath('data.version_number', 2)->assertJsonPath('data.document_type', 'reformulated')->json('data.id');
     $second = MunicipalPoaDocument::findOrFail($secondId);
 
@@ -56,7 +60,7 @@ it('rechaza archivos inválidos o extensiones que no corresponden a PDF', functi
         'extension' => ($this->pdf)('document.txt'),
         'image' => UploadedFile::fake()->image('image.png'),
     };
-    $this->postJson($this->url, ['title' => 'Intento', 'pdf' => $file])->assertUnprocessable()->assertJsonValidationErrors('pdf');
+    $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Intento', 'pdf' => $file])->assertUnprocessable()->assertJsonValidationErrors('pdf');
     expect($this->poa->documents()->exists())->toBeFalse()
         ->and(Storage::disk('local')->allFiles())->toBe([]);
 })->with(['text', 'extension', 'image']);
@@ -64,12 +68,12 @@ it('rechaza archivos inválidos o extensiones que no corresponden a PDF', functi
 it('aplica el límite configurable de tamaño de PDF', function (): void {
     config(['municipal.poa_max_upload_kb' => 1]);
     $file = UploadedFile::fake()->createWithContent('large.pdf', "%PDF-1.4\n".str_repeat('a', 2048));
-    $this->postJson($this->url, ['title' => 'Grande', 'pdf' => $file])->assertUnprocessable()->assertJsonValidationErrors('pdf');
+    $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Grande', 'pdf' => $file])->assertUnprocessable()->assertJsonValidationErrors('pdf');
     expect(Storage::disk('local')->allFiles())->toBe([]);
 });
 
 it('rechaza atributos controlados por el servidor incluso si son nulos', function (string $field): void {
-    $this->postJson($this->url, ['title' => 'Inicial', 'pdf' => ($this->pdf)(), $field => null])
+    $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Inicial', 'pdf' => ($this->pdf)(), $field => null])
         ->assertUnprocessable()->assertJsonValidationErrors($field);
     expect($this->poa->documents()->exists())->toBeFalse();
 })->with(['version_number', 'document_type', 'pdf_path', 'is_current', 'published_at', 'municipal_poa_id', 'original_filename']);
@@ -77,7 +81,10 @@ it('rechaza atributos controlados por el servidor incluso si son nulos', functio
 it('publica solo con permiso específico y mantiene un único documento actual', function (): void {
     $ids = [];
     foreach (['Inicial', 'Reformulado'] as $title) {
-        $ids[] = $this->postJson($this->url, ['title' => $title, 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
+        if ($title === 'Reformulado') {
+            $this->version = app(MunicipalPoaVersionService::class)->create($this->poa);
+        }
+        $ids[] = $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => $title, 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
     }
     $this->putJson($this->url."/{$ids[0]}/publication")->assertForbidden();
     $reviewer = User::factory()->create();
@@ -86,15 +93,16 @@ it('publica solo con permiso específico y mantiene un único documento actual',
     $this->putJson($this->url."/{$ids[1]}/publication")->assertOk()->assertJsonPath('data.is_current', true);
     $this->getJson($this->url.'?is_current=true&published=true')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $ids[1]);
 
-    expect($this->poa->documents()->where('is_current', true)->count())->toBe(1)
+    expect($this->poa->versions()->where('is_current', true)->count())->toBe(1)
         ->and($this->poa->documents()->publiclyAvailable()->count())->toBe(2)
         ->and(Storage::disk('local')->allFiles())->toHaveCount(2);
 });
 
 it('no publica archivos ausentes o corruptos y conserva la versión anterior', function (bool $missing): void {
     $this->user->givePermissionTo('municipal.documents.publish');
-    $firstId = $this->postJson($this->url, ['title' => 'Inicial', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
-    $nextId = $this->postJson($this->url, ['title' => 'Nuevo', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
+    $firstId = $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Inicial', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
+    $this->version = app(MunicipalPoaVersionService::class)->create($this->poa);
+    $nextId = $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Nuevo', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
     $this->putJson($this->url."/{$firstId}/publication")->assertOk();
     $next = MunicipalPoaDocument::findOrFail($nextId);
     if ($missing) {
@@ -113,7 +121,7 @@ it('limpia la carga nueva si falla el registro después de insertar el documento
         throw new RuntimeException('Fallo de registro simulado.');
     });
     try {
-        $this->postJson($this->url, ['title' => 'Fallo', 'pdf' => ($this->pdf)()])->assertInternalServerError();
+        $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Fallo', 'pdf' => ($this->pdf)()])->assertInternalServerError();
     } finally {
         Event::forget($event);
     }
@@ -126,7 +134,7 @@ it('no crea registros si falla el almacenamiento del PDF', function (): void {
     $disk->shouldReceive('putFileAs')->once()->andReturn(false);
     $disk->shouldReceive('delete')->once()->andReturn(true);
     Storage::shouldReceive('disk')->with('local')->andReturn($disk);
-    $this->postJson($this->url, ['title' => 'Fallo', 'pdf' => ($this->pdf)()])->assertInternalServerError();
+    $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Fallo', 'pdf' => ($this->pdf)()])->assertInternalServerError();
     expect($this->poa->documents()->exists())->toBeFalse();
 });
 
@@ -141,7 +149,7 @@ it('encola limpieza si no puede borrar una carga fallida', function (): void {
         throw new RuntimeException('Fallo de registro.');
     });
     try {
-        $this->postJson($this->url, ['title' => 'Fallo', 'pdf' => ($this->pdf)()])->assertInternalServerError();
+        $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Fallo', 'pdf' => ($this->pdf)()])->assertInternalServerError();
     } finally {
         Event::forget($event);
     }
@@ -151,7 +159,7 @@ it('encola limpieza si no puede borrar una carga fallida', function (): void {
 });
 
 it('la limpieza conserva archivos referenciados y rechaza rutas arbitrarias', function (): void {
-    $id = $this->postJson($this->url, ['title' => 'Inicial', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
+    $id = $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Inicial', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
     $document = MunicipalPoaDocument::findOrFail($id);
     (new CleanupMunicipalUpload($document->pdf_path))->handle();
     Storage::disk('local')->assertExists($document->pdf_path);
@@ -165,10 +173,11 @@ it('la limpieza conserva archivos referenciados y rechaza rutas arbitrarias', fu
 
 it('revierte la publicación si falla después de retirar el estado actual anterior', function (): void {
     $this->user->givePermissionTo('municipal.documents.publish');
-    $firstId = $this->postJson($this->url, ['title' => 'Inicial', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
-    $nextId = $this->postJson($this->url, ['title' => 'Nuevo', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
+    $firstId = $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Inicial', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
+    $this->version = app(MunicipalPoaVersionService::class)->create($this->poa);
+    $nextId = $this->postJson($this->url, ['municipal_poa_version_id' => $this->version->id, 'title' => 'Nuevo', 'pdf' => ($this->pdf)()])->assertCreated()->json('data.id');
     $this->putJson($this->url."/{$firstId}/publication")->assertOk();
-    $event = 'eloquent.updating: '.MunicipalPoaDocument::class;
+    $event = 'eloquent.updating: '.MunicipalPoaVersion::class;
     Event::listen($event, function (): void {
         throw new RuntimeException('Fallo de publicación.');
     });
